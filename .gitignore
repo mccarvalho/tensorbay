@@ -53,3 +53,6 @@ alembic/versions/*.pyc
 *.tfstate
 *.tfstate.backup
 *.tfvars
+infra/.terraform/
+infra/tfplan
+infra/*.tfstate*

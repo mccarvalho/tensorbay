@@ -19,7 +19,14 @@ from neocloud.audit.router import router as audit_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Load secrets from AWS Secrets Manager (production/staging only)
+    from neocloud.common.secrets import load_secrets_to_env
+    load_secrets_to_env(
+        env=settings.app_env,
+        region=settings.aws_region,
+    )
+
+    # Configure structured logging
     import structlog
     structlog.configure(
         processors=[

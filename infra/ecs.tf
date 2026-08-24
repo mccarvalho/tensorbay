@@ -51,10 +51,13 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
-      Action = [
-        "secretsmanager:GetSecretValue"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        aws_secretsmanager_secret.db_master.arn,
+        aws_secretsmanager_secret.app_config.arn,
+        aws_secretsmanager_secret.cognito.arn,
+        aws_secretsmanager_secret.infra_config.arn,
       ]
-      Resource = [aws_secretsmanager_secret.db_credentials.arn]
     }]
   })
 }
@@ -137,23 +140,26 @@ resource "aws_ecs_task_definition" "api" {
       protocol      = "tcp"
     }]
 
+    # Non-secret config only — all credentials come from Secrets Manager
     environment = [
-      { name = "APP_ENV", value = var.environment },
-      { name = "APP_DEBUG", value = "false" },
+      { name = "APP_ENV",    value = var.environment },
       { name = "AWS_REGION", value = var.aws_region },
-      { name = "AWS_EVENTBRIDGE_BUS", value = aws_cloudwatch_event_bus.main.name },
-      { name = "AWS_S3_BUCKET", value = aws_s3_bucket.documents.id },
-      { name = "REDIS_URL", value = "redis://${aws_elasticache_cluster.main.cache_nodes[0].address}:6379/0" },
-      { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.main.id },
-      { name = "COGNITO_CLIENT_ID", value = aws_cognito_user_pool_client.api.id },
-      { name = "COGNITO_REGION", value = var.aws_region },
-      { name = "CORS_ORIGINS", value = "*" },
     ]
 
-    secrets = [{
-      name      = "DATABASE_URL"
-      valueFrom = aws_secretsmanager_secret.db_url.arn
-    }]
+    # All secrets loaded from Secrets Manager at task startup
+    secrets = [
+      { name = "DATABASE_URL",        valueFrom = "${aws_secretsmanager_secret.db_master.arn}:url::" },
+      { name = "REDIS_URL",           valueFrom = "${aws_secretsmanager_secret.infra_config.arn}:redis_url::" },
+      { name = "AWS_EVENTBRIDGE_BUS", valueFrom = "${aws_secretsmanager_secret.infra_config.arn}:eventbridge_bus::" },
+      { name = "AWS_S3_BUCKET",       valueFrom = "${aws_secretsmanager_secret.infra_config.arn}:s3_bucket::" },
+      { name = "JWT_SECRET_KEY",      valueFrom = "${aws_secretsmanager_secret.app_config.arn}:jwt_secret_key::" },
+      { name = "JWT_ALGORITHM",       valueFrom = "${aws_secretsmanager_secret.app_config.arn}:jwt_algorithm::" },
+      { name = "APP_DEBUG",           valueFrom = "${aws_secretsmanager_secret.app_config.arn}:app_debug::" },
+      { name = "CORS_ORIGINS",        valueFrom = "${aws_secretsmanager_secret.app_config.arn}:cors_origins::" },
+      { name = "COGNITO_USER_POOL_ID",valueFrom = "${aws_secretsmanager_secret.cognito.arn}:user_pool_id::" },
+      { name = "COGNITO_CLIENT_ID",   valueFrom = "${aws_secretsmanager_secret.cognito.arn}:client_id::" },
+      { name = "COGNITO_REGION",      valueFrom = "${aws_secretsmanager_secret.cognito.arn}:region::" },
+    ]
 
     logConfiguration = {
       logDriver = "awslogs"
@@ -174,18 +180,7 @@ resource "aws_ecs_task_definition" "api" {
   }])
 }
 
-# Database URL secret (constructed after RDS is created)
-resource "aws_secretsmanager_secret" "db_url" {
-  name                    = "${var.project_name}/${var.environment}/database-url"
-  recovery_window_in_days = 0
-
-  tags = { Name = "${var.project_name}-${var.environment}-db-url" }
-}
-
-resource "aws_secretsmanager_secret_version" "db_url" {
-  secret_id     = aws_secretsmanager_secret.db_url.id
-  secret_string = "postgresql+asyncpg://neocloud:${random_password.db_password.result}@${aws_db_instance.main.address}:5432/${var.db_name}"
-}
+# Database URL secret is now managed in secrets.tf as neocloud/{env}/db/master
 
 # ECS Service
 resource "aws_ecs_service" "api" {

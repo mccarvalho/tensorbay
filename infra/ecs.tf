@@ -104,10 +104,13 @@ resource "aws_iam_role_policy" "ecs_task" {
       },
       {
         Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          aws_secretsmanager_secret.db_master.arn,
+          aws_secretsmanager_secret.app_config.arn,
+          aws_secretsmanager_secret.cognito.arn,
+          aws_secretsmanager_secret.infra_config.arn,
         ]
-        Resource = [aws_secretsmanager_secret.db_credentials.arn]
       }
     ]
   })

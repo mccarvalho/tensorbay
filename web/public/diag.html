@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeoCloud — Diagnostics</title>
+    <style>
+      body { margin:0; background:#0d0221; color:#b9a9d6; font-family:ui-monospace,Menlo,monospace; padding:1.5rem; }
+      h1 { color:#fff; font-family:system-ui; }
+      .eyebrow{ color:#00d4ff; text-transform:uppercase; letter-spacing:.2em; font-size:.72rem; font-weight:700; }
+      pre { background:#241043; border:1px solid rgba(255,255,255,.08); border-radius:.75rem; padding:1rem; white-space:pre-wrap; word-break:break-word; font-size:.8rem; line-height:1.5; }
+      .ok{color:#34d399}.bad{color:#ff6ec4}.warn{color:#fbbf24}
+    </style>
+  </head>
+  <body>
+    <span class="eyebrow">NeoCloud · Diagnostics</span>
+    <h1>Environment & API check</h1>
+    <p>This runs entirely in your browser and shows exactly what the API returns from here. Share the output below.</p>
+    <pre id="out">Running…</pre>
+    <script>
+      const out = document.getElementById('out');
+      const lines = [];
+      const log = (s, cls) => { lines.push(cls ? `<span class="${cls}">${s}</span>` : s); out.innerHTML = lines.join('\n'); };
+
+      function parseJwt(t){ try{ const p=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'); return JSON.parse(atob(p)); }catch{ return null; } }
+
+      (async function () {
+        log('Origin: ' + location.origin);
+        log('User-Agent: ' + navigator.userAgent);
+        log('Service workers: ' + ((await navigator.serviceWorker?.getRegistrations?.())?.length ?? 'n/a'));
+
+        // Read the stored session (if signed in)
+        let session = null;
+        try { session = JSON.parse(localStorage.getItem('neocloud.session') || 'null'); } catch {}
+        log('\nStored session present: ' + (session ? 'YES' : 'NO'));
+        if (session) {
+          const claims = parseJwt(session.idToken || '');
+          log('  email: ' + (claims?.email ?? '?'));
+          log('  groups: ' + JSON.stringify(claims?.['cognito:groups'] ?? []));
+          log('  token exp: ' + new Date((parseJwt(session.accessToken||'')?.exp ?? 0)*1000).toISOString());
+          log('  stored expiresAt: ' + new Date(session.expiresAt).toISOString());
+        }
+
+        const headers = {};
+        if (session?.accessToken) headers.Authorization = 'Bearer ' + session.accessToken;
+
+        async function probe(path) {
+          log('\n--- GET ' + path + ' ---');
+          try {
+            const r = await fetch(path, { headers, cache: 'no-store' });
+            const ct = r.headers.get('content-type') || '';
+            const xcache = r.headers.get('x-cache') || '';
+            const via = r.headers.get('via') || '';
+            const text = await r.text();
+            const isHtml = ct.includes('html') || text.trim().startsWith('<');
+            log('  status: ' + r.status + (r.ok ? '' : ''), r.status < 400 ? 'ok' : 'warn');
+            log('  content-type: ' + ct + (isHtml ? '  <<< HTML (THIS IS THE BUG)' : ''), isHtml ? 'bad' : 'ok');
+            if (xcache) log('  x-cache: ' + xcache);
+            if (via) log('  via: ' + via);
+            log('  body[0..160]: ' + JSON.stringify(text.slice(0, 160)));
+          } catch (e) {
+            log('  FETCH ERROR: ' + e, 'bad');
+          }
+        }
+
+        await probe('/health');
+        await probe('/v1/dashboards/executive');
+        await probe('/v1/customers?limit=5');
+
+        log('\nDone. Please copy everything above and send it.', 'ok');
+      })();
+    </script>
+  </body>
+</html>

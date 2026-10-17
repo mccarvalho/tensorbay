@@ -118,6 +118,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function SkusTab({ canWrite }: { canWrite: boolean }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ code: '', name: '', category: 'GPU', gpu_model: 'H200', description: '', active: true });
 
   const { data, isLoading, isError, error } = useQuery({
@@ -125,21 +126,44 @@ function SkusTab({ canWrite }: { canWrite: boolean }) {
     queryFn: () => api.get<Sku[]>('/v1/catalog/skus?limit=500'),
   });
 
-  const createMut = useMutation({
-    mutationFn: () =>
-      api.post<Sku>('/v1/catalog/skus', {
+  function resetForm() {
+    setEditId(null);
+    setForm({ code: '', name: '', category: 'GPU', gpu_model: 'H200', description: '', active: true });
+  }
+  function openCreate() { resetForm(); setOpen(true); }
+  function openEdit(s: Sku) {
+    setEditId(s.id);
+    setForm({
+      code: s.code, name: s.name, category: s.category,
+      gpu_model: s.gpu_model ?? 'H200', description: s.description ?? '', active: s.active,
+    });
+    setOpen(true);
+  }
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const payload = {
         code: form.code,
         name: form.name,
         category: form.category,
         gpu_model: form.category === 'GPU' || form.category === 'SERVER' ? form.gpu_model || null : null,
         description: form.description || null,
         active: form.active,
-      }),
+      };
+      return editId
+        ? api.patch<Sku>(`/v1/catalog/skus/${editId}`, payload)
+        : api.post<Sku>('/v1/catalog/skus', payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['skus'] });
       setOpen(false);
-      setForm({ code: '', name: '', category: 'GPU', gpu_model: 'H200', description: '', active: true });
+      resetForm();
     },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.del<void>(`/v1/catalog/skus/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['skus'] }),
   });
 
   const columns: Array<Column<Sku>> = [
@@ -148,22 +172,35 @@ function SkusTab({ canWrite }: { canWrite: boolean }) {
     { key: 'category', header: 'Category', render: (s) => <Badge tone={CATEGORY_TONE[s.category] ?? 'neutral'}>{s.category}</Badge> },
     { key: 'gpu_model', header: 'GPU', render: (s) => s.gpu_model ?? '—' },
     { key: 'active', header: 'Active', render: (s) => <Badge tone={s.active ? 'success' : 'neutral'}>{s.active ? 'ACTIVE' : 'INACTIVE'}</Badge> },
+    ...(canWrite
+      ? [{
+          key: 'actions', header: '', className: 'text-right',
+          render: (s: Sku) => (
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => openEdit(s)}>Edit</button>
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs text-flamingo"
+                onClick={() => { if (confirm(`Delete SKU ${s.code}?`)) deleteMut.mutate(s.id); }}>Delete</button>
+            </div>
+          ),
+        } as Column<Sku>]
+      : []),
   ];
 
   return (
     <div className="flex flex-col gap-4">
       {canWrite && (
         <div className="flex justify-end">
-          <button type="button" className="btn-primary" onClick={() => setOpen(true)}>+ New SKU</button>
+          <button type="button" className="btn-primary" onClick={openCreate}>+ New SKU</button>
         </div>
       )}
+      {deleteMut.isError && <ErrorState error={deleteMut.error} />}
       {isLoading ? <Spinner label="Loading SKUs…" /> : isError ? <ErrorState error={error} /> : (
         <DataTable columns={columns} rows={data ?? []} rowKey={(s) => s.id}
           empty={<EmptyState title="No SKUs yet" hint="Create SKUs like GPU-H200-SXM or SERVER-8X-H200 to sell against." />} />
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="New SKU">
-        <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); createMut.mutate(); }}>
+      <Modal open={open} onClose={() => { setOpen(false); resetForm(); }} title={editId ? 'Edit SKU' : 'New SKU'}>
+        <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); saveMut.mutate(); }}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="s_code">Code</label>
@@ -200,11 +237,11 @@ function SkusTab({ canWrite }: { canWrite: boolean }) {
             <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
             Active
           </label>
-          {createMut.isError && <ErrorState error={createMut.error} />}
+          {saveMut.isError && <ErrorState error={saveMut.error} />}
           <div className="mt-2 flex justify-end gap-3">
-            <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={createMut.isPending}>
-              {createMut.isPending ? 'Creating…' : 'Create SKU'}
+            <button type="button" className="btn-ghost" onClick={() => { setOpen(false); resetForm(); }}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saveMut.isPending}>
+              {saveMut.isPending ? 'Saving…' : editId ? 'Save Changes' : 'Create SKU'}
             </button>
           </div>
         </form>
@@ -219,6 +256,7 @@ function SkusTab({ canWrite }: { canWrite: boolean }) {
 function PriceBooksTab({ canWrite }: { canWrite: boolean }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', scope: 'LIST', currency: 'USD', region: '', customer_id: '' });
 
   const { data, isLoading, isError, error } = useQuery({
@@ -231,20 +269,43 @@ function PriceBooksTab({ canWrite }: { canWrite: boolean }) {
     enabled: open && form.scope === 'CUSTOMER',
   });
 
-  const createMut = useMutation({
-    mutationFn: () =>
-      api.post<PriceBook>('/v1/catalog/price-books', {
+  function resetForm() {
+    setEditId(null);
+    setForm({ name: '', scope: 'LIST', currency: 'USD', region: '', customer_id: '' });
+  }
+  function openCreate() { resetForm(); setOpen(true); }
+  function openEdit(b: PriceBook) {
+    setEditId(b.id);
+    setForm({
+      name: b.name, scope: b.scope, currency: b.currency ?? 'USD',
+      region: b.region ?? '', customer_id: b.customer_id ?? '',
+    });
+    setOpen(true);
+  }
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const payload = {
         name: form.name,
         scope: form.scope,
         currency: form.currency || null,
         region: form.scope === 'REGIONAL' ? form.region || null : null,
         customer_id: form.scope === 'CUSTOMER' ? form.customer_id || null : null,
-      }),
+      };
+      return editId
+        ? api.patch<PriceBook>(`/v1/catalog/price-books/${editId}`, payload)
+        : api.post<PriceBook>('/v1/catalog/price-books', payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['price-books'] });
       setOpen(false);
-      setForm({ name: '', scope: 'LIST', currency: 'USD', region: '', customer_id: '' });
+      resetForm();
     },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.del<void>(`/v1/catalog/price-books/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['price-books'] }),
   });
 
   const columns: Array<Column<PriceBook>> = [
@@ -252,22 +313,35 @@ function PriceBooksTab({ canWrite }: { canWrite: boolean }) {
     { key: 'scope', header: 'Scope', render: (b) => <Badge tone={SCOPE_TONE[b.scope] ?? 'neutral'}>{b.scope}</Badge> },
     { key: 'currency', header: 'Currency', render: (b) => b.currency ?? '—' },
     { key: 'region', header: 'Region', render: (b) => b.region ?? '—' },
+    ...(canWrite
+      ? [{
+          key: 'actions', header: '', className: 'text-right',
+          render: (b: PriceBook) => (
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => openEdit(b)}>Edit</button>
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs text-flamingo"
+                onClick={() => { if (confirm(`Delete price book "${b.name}"?`)) deleteMut.mutate(b.id); }}>Delete</button>
+            </div>
+          ),
+        } as Column<PriceBook>]
+      : []),
   ];
 
   return (
     <div className="flex flex-col gap-4">
       {canWrite && (
         <div className="flex justify-end">
-          <button type="button" className="btn-primary" onClick={() => setOpen(true)}>+ New Price Book</button>
+          <button type="button" className="btn-primary" onClick={openCreate}>+ New Price Book</button>
         </div>
       )}
+      {deleteMut.isError && <ErrorState error={deleteMut.error} />}
       {isLoading ? <Spinner label="Loading price books…" /> : isError ? <ErrorState error={error} /> : (
         <DataTable columns={columns} rows={data ?? []} rowKey={(b) => b.id}
           empty={<EmptyState title="No price books yet" hint="Create a List price book, plus customer/reserved/spot books as needed." />} />
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="New Price Book">
-        <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); createMut.mutate(); }}>
+      <Modal open={open} onClose={() => { setOpen(false); resetForm(); }} title={editId ? 'Edit Price Book' : 'New Price Book'}>
+        <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); saveMut.mutate(); }}>
           <div>
             <label className="label" htmlFor="b_name">Name</label>
             <input id="b_name" className="input" required placeholder="2026 List Price" value={form.name}
@@ -302,11 +376,11 @@ function PriceBooksTab({ canWrite }: { canWrite: boolean }) {
               </select>
             </div>
           )}
-          {createMut.isError && <ErrorState error={createMut.error} />}
+          {saveMut.isError && <ErrorState error={saveMut.error} />}
           <div className="mt-2 flex justify-end gap-3">
-            <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={createMut.isPending}>
-              {createMut.isPending ? 'Creating…' : 'Create Price Book'}
+            <button type="button" className="btn-ghost" onClick={() => { setOpen(false); resetForm(); }}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saveMut.isPending}>
+              {saveMut.isPending ? 'Saving…' : editId ? 'Save Changes' : 'Create Price Book'}
             </button>
           </div>
         </form>
@@ -321,6 +395,7 @@ function PriceBooksTab({ canWrite }: { canWrite: boolean }) {
 function PricesTab({ canWrite }: { canWrite: boolean }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({
     sku_id: '', price_book_id: '', commercial_model: 'GPU_HOURLY', unit_price: 0, unit: 'GPU-hour', term_months: '',
   });
@@ -347,21 +422,44 @@ function PricesTab({ canWrite }: { canWrite: boolean }) {
     return (id: string) => m.get(id) ?? id;
   }, [booksQuery.data]);
 
-  const createMut = useMutation({
-    mutationFn: () =>
-      api.post<Price>('/v1/catalog/prices', {
+  function resetForm() {
+    setEditId(null);
+    setForm({ sku_id: '', price_book_id: '', commercial_model: 'GPU_HOURLY', unit_price: 0, unit: 'GPU-hour', term_months: '' });
+  }
+  function openCreate() { resetForm(); setOpen(true); }
+  function openEdit(p: Price) {
+    setEditId(p.id);
+    setForm({
+      sku_id: p.sku_id, price_book_id: p.price_book_id, commercial_model: p.commercial_model,
+      unit_price: Number(p.unit_price), unit: p.unit, term_months: p.term_months ? String(p.term_months) : '',
+    });
+    setOpen(true);
+  }
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const payload = {
         sku_id: form.sku_id,
         price_book_id: form.price_book_id,
         commercial_model: form.commercial_model,
         unit_price: Number(form.unit_price),
         unit: form.unit,
         term_months: form.term_months ? Number(form.term_months) : null,
-      }),
+      };
+      return editId
+        ? api.patch<Price>(`/v1/catalog/prices/${editId}`, payload)
+        : api.post<Price>('/v1/catalog/prices', payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['prices'] });
       setOpen(false);
-      setForm({ sku_id: '', price_book_id: '', commercial_model: 'GPU_HOURLY', unit_price: 0, unit: 'GPU-hour', term_months: '' });
+      resetForm();
     },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.del<void>(`/v1/catalog/prices/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['prices'] }),
   });
 
   const columns: Array<Column<Price>> = [
@@ -371,6 +469,18 @@ function PricesTab({ canWrite }: { canWrite: boolean }) {
     { key: 'unit_price', header: 'Unit Price', render: (p) => <span className="font-semibold text-cyan">{money(p.unit_price)}</span> },
     { key: 'unit', header: 'Unit' },
     { key: 'term_months', header: 'Term', render: (p) => (p.term_months ? `${p.term_months} mo` : '—') },
+    ...(canWrite
+      ? [{
+          key: 'actions', header: '', className: 'text-right',
+          render: (p: Price) => (
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => openEdit(p)}>Edit</button>
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs text-flamingo"
+                onClick={() => { if (confirm(`Delete price for ${skuName(p.sku_id)}?`)) deleteMut.mutate(p.id); }}>Delete</button>
+            </div>
+          ),
+        } as Column<Price>]
+      : []),
   ];
 
   const busy = pricesQuery.isLoading || skusQuery.isLoading || booksQuery.isLoading;
@@ -379,16 +489,17 @@ function PricesTab({ canWrite }: { canWrite: boolean }) {
     <div className="flex flex-col gap-4">
       {canWrite && (
         <div className="flex justify-end">
-          <button type="button" className="btn-primary" onClick={() => setOpen(true)}>+ New Price</button>
+          <button type="button" className="btn-primary" onClick={openCreate}>+ New Price</button>
         </div>
       )}
+      {deleteMut.isError && <ErrorState error={deleteMut.error} />}
       {busy ? <Spinner label="Loading prices…" /> : pricesQuery.isError ? <ErrorState error={pricesQuery.error} /> : (
         <DataTable columns={columns} rows={pricesQuery.data ?? []} rowKey={(p) => p.id}
           empty={<EmptyState title="No prices yet" hint="Map a SKU in a price book to a commercial model and unit price." />} />
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="New Price">
-        <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); createMut.mutate(); }}>
+      <Modal open={open} onClose={() => { setOpen(false); resetForm(); }} title={editId ? 'Edit Price' : 'New Price'}>
+        <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); saveMut.mutate(); }}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="p_sku">SKU</label>
@@ -430,11 +541,11 @@ function PricesTab({ canWrite }: { canWrite: boolean }) {
                 onChange={(e) => setForm({ ...form, term_months: e.target.value })} />
             </div>
           </div>
-          {createMut.isError && <ErrorState error={createMut.error} />}
+          {saveMut.isError && <ErrorState error={saveMut.error} />}
           <div className="mt-2 flex justify-end gap-3">
-            <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={createMut.isPending}>
-              {createMut.isPending ? 'Creating…' : 'Create Price'}
+            <button type="button" className="btn-ghost" onClick={() => { setOpen(false); resetForm(); }}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saveMut.isPending}>
+              {saveMut.isPending ? 'Saving…' : editId ? 'Save Changes' : 'Create Price'}
             </button>
           </div>
         </form>

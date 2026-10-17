@@ -103,6 +103,35 @@ data "aws_iam_policy_document" "deploy" {
       values   = ["ecs-tasks.amazonaws.com"]
     }
   }
+
+  # Frontend deploy: sync the SPA build to S3 and invalidate CloudFront.
+  dynamic "statement" {
+    for_each = var.frontend_bucket_arn != "" ? [1] : []
+    content {
+      sid    = "FrontendS3Sync"
+      effect = "Allow"
+      actions = [
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ]
+      resources = [
+        var.frontend_bucket_arn,
+        "${var.frontend_bucket_arn}/*"
+      ]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.frontend_distribution_arn != "" ? [1] : []
+    content {
+      sid       = "FrontendCloudFrontInvalidate"
+      effect    = "Allow"
+      actions   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+      resources = [var.frontend_distribution_arn]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "deploy" {

@@ -135,3 +135,18 @@ output "cicd_deploy_role_arn" {
   description = "GitHub Actions deploy role ARN (set as AWS_DEPLOY_ROLE_ARN in GitHub). Empty if CI/CD disabled."
   value       = var.enable_cicd ? module.cicd[0].deploy_role_arn : ""
 }
+
+output "frontend_url" {
+  description = "Public HTTPS URL of the NeoCloud web frontend (CloudFront)."
+  value       = module.frontend.url
+}
+
+output "frontend_bucket" {
+  description = "S3 bucket holding the frontend build."
+  value       = module.frontend.bucket_name
+}
+
+output "frontend_distribution_id" {
+  description = "CloudFront distribution ID for cache invalidation."
+  value       = module.frontend.distribution_id
+}

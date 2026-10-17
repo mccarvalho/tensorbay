@@ -187,5 +187,18 @@ module "cicd" {
     module.compute.task_role_arn,
     module.compute.execution_role_arn,
   ]
-  tags = local.common_tags
+  frontend_bucket_arn       = module.frontend.bucket_arn
+  frontend_distribution_arn = module.frontend.distribution_arn
+  tags                      = local.common_tags
+}
+
+########################################
+# Frontend hosting (S3 + CloudFront)
+########################################
+
+module "frontend" {
+  source = "./modules/frontend"
+
+  name_prefix = local.name_prefix
+  tags        = local.common_tags
 }

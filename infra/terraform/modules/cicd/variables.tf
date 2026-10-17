@@ -52,3 +52,15 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "frontend_bucket_arn" {
+  description = "ARN of the frontend S3 bucket (for CI/CD sync). Empty to disable."
+  type        = string
+  default     = ""
+}
+
+variable "frontend_distribution_arn" {
+  description = "ARN of the frontend CloudFront distribution (for invalidation). Empty to disable."
+  type        = string
+  default     = ""
+}

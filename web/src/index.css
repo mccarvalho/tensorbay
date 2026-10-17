@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-space-900 text-grape-soft font-sans antialiased;
+    background-image: theme('backgroundImage.brand-radial');
+    background-attachment: fixed;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-white font-semibold tracking-tight;
+  }
+  ::selection {
+    background: rgba(0, 212, 255, 0.3);
+  }
+}
+
+@layer components {
+  /* Section eyebrow — the "01 · CONTEXT" label style from the deck */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-cyan;
+  }
+  .card {
+    @apply rounded-2xl border border-white/5 bg-space-600/60 p-5 shadow-card backdrop-blur-sm;
+  }
+  .card-glow {
+    @apply rounded-2xl border border-cyan/20 bg-space-600/70 p-5 shadow-glow backdrop-blur-sm;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-gradient text-space-900 hover:opacity-90 shadow-glow;
+  }
+  .btn-ghost {
+    @apply btn border border-white/10 text-white hover:border-cyan/40 hover:bg-white/5;
+  }
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-space-800/80 px-3.5 py-2.5 text-sm text-white placeholder:text-grape-soft/50 focus:border-cyan/60 focus:outline-none focus:ring-2 focus:ring-cyan/20;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-grape-soft;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .table-wrap {
+    @apply overflow-hidden rounded-2xl border border-white/5 bg-space-600/40;
+  }
+  .th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-grape-soft;
+  }
+  .td {
+    @apply px-4 py-3 text-sm text-white/90 border-t border-white/5;
+  }
+}

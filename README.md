@@ -26,10 +26,13 @@ See `NeoCloud_GPU_Product_Plan_EN.md` for the full product plan.
 │   ├── migrations/           # Alembic (async)
 │   ├── tests/                # pytest suite
 │   └── Dockerfile
+├── web/                      # React + Vite + TS frontend (TensorBay brand)
+│   ├── public/brand/         # official TensorBay logo + symbol
+│   └── src/                  # auth (PKCE SSO), api client, pages, components
 ├── infra/terraform/          # AWS infrastructure as code
 │   └── modules/              # networking, security, data, compute,
-│                             #   identity, observability, ai, cicd
-├── .github/workflows/        # ci.yml (lint+test), cd.yml (build+deploy)
+│                             #   identity, observability, ai, cicd, frontend
+├── .github/workflows/        # ci.yml (lint+test), cd.yml (API), cd-web.yml (web)
 └── NeoCloud_GPU_Product_Plan_EN.md
 ```
 
@@ -56,6 +59,7 @@ Two workflows in `.github/workflows/`:
 |----------|---------|------|
 | `ci.yml` | push/PR touching `app/**` | ruff lint + pytest |
 | `cd.yml` | push to `main` touching `app/**` | build image → push ECR → register task def → update ECS service → wait stable |
+| `cd-web.yml` | push to `main` touching `web/**` | npm build → sync to S3 → invalidate CloudFront |
 
 **Authentication is keyless** — Actions assumes AWS IAM role
 `arn:aws:iam::369607683065:role/neocloud-dev-gha-deploy` via GitHub OIDC
@@ -80,12 +84,19 @@ To deploy manually instead, see the commands in `app/README.md`.
 
 ## Status
 
-Release 1 (Commercial & Capacity Control Plane) — infrastructure deployed to
-`us-east-2`; application domains, AI document generation, and executive
-dashboards implemented with a passing test suite. Not yet live-serving the app
-image (placeholder until the first CD run).
+Release 1 (Commercial & Capacity Control Plane) — **live** in `us-east-2`:
 
-### Remaining operational steps
-- Enable Bedrock Claude **model access** in the Bedrock console (us-east-2).
-- Complete **Google Workspace SSO** (second Terraform apply with Google client creds).
-- First **CD deploy** replaces the placeholder container with the FastAPI image.
+- **Frontend:** https://d22xy9yyfwju3n.cloudfront.net (React SPA, TensorBay brand, S3+CloudFront)
+- **API:** http://neocloud-dev-alb-1924778288.us-east-2.elb.amazonaws.com (ECS Fargate)
+- Database migrated (27 tables); full authenticated CRUD validated end-to-end.
+- Cognito + Google Workspace SSO handshake validated.
+
+See [`STATUS.md`](STATUS.md) for the current state and the short list of manual
+actions remaining.
+
+### Remaining operational steps (manual, account-owner)
+- **Enable the Anthropic model**: Bedrock console (us-east-2) → Model access →
+  submit the Anthropic *use case details* form. This is the only thing blocking
+  AI document generation (the app is otherwise fully wired).
+- **Rotate the Google client secret** and confirm the consent screen is **Internal**.
+- Optional hardening: HTTPS + custom domain on the ALB (frontend is already HTTPS).

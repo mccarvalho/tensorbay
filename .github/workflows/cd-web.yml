@@ -1,0 +1,77 @@
+name: CD Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/cd-web.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: cd-web-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  S3_BUCKET: neocloud-dev-web
+  CLOUDFRONT_DISTRIBUTION_ID: E2EL9X8Q231YLE
+  # Production runtime config baked into the SPA at build time.
+  VITE_API_BASE_URL: http://neocloud-dev-alb-1924778288.us-east-2.elb.amazonaws.com
+  VITE_COGNITO_DOMAIN: https://neocloud-dev-auth.auth.us-east-2.amazoncognito.com
+  VITE_COGNITO_CLIENT_ID: 69ua89fisqeohfmcdhc6a7d16
+  VITE_COGNITO_REDIRECT_URI: https://d22xy9yyfwju3n.cloudfront.net/callback
+  VITE_COGNITO_LOGOUT_URI: https://d22xy9yyfwju3n.cloudfront.net/
+
+jobs:
+  deploy:
+    name: Build & Deploy Web
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        run: |
+          # Hashed assets: long, immutable cache.
+          aws s3 sync dist/ "s3://$S3_BUCKET/" --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html" --exclude "brand/*"
+          # Brand assets: moderate cache.
+          aws s3 sync dist/brand/ "s3://$S3_BUCKET/brand/" \
+            --cache-control "public,max-age=86400"
+          # index.html: never cache (so new deploys are picked up immediately).
+          aws s3 cp dist/index.html "s3://$S3_BUCKET/index.html" \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*"

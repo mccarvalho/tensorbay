@@ -1,8 +1,8 @@
 // Capacity — per-model ledger lookup, a capacity-check panel, and the
 // incoming-capacity pipeline. Both ledger and check require a gpu_model, so a
 // model input drives the view.
-import { useState, type FormEvent } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo, type FormEvent } from 'react';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { hasPermission } from '../permissions';
 import { GPU_MODELS } from '../constants';
@@ -85,6 +85,9 @@ export default function Capacity() {
         title="Capacity Planning"
         description="Look up the live capacity ledger per GPU model, run availability checks, and review incoming supply."
       />
+
+      {/* Fleet-wide capacity + overselling overview + incoming timeline */}
+      <FleetOverview />
 
       {/* Ledger lookup */}
       <section className="flex flex-col gap-4">
@@ -348,4 +351,168 @@ function IncomingSection() {
       </Modal>
     </section>
   );
+}
+
+// --------------------------------------------------------------------------- //
+// Fleet-wide capacity overview (plan §12): per-model stacked ledger bars with
+// an overselling indicator, plus an incoming-supply timeline. Dependency-free
+// (CSS bars) — charts lib lands with the Executive Dashboard.
+// --------------------------------------------------------------------------- //
+interface GpuAsset { id: string; model: string }
+
+// Segment colors map to the brand palette.
+const SEG: Array<{ key: keyof Ledger; label: string; cls: string }> = [
+  { key: 'available', label: 'Available', cls: 'bg-cyan' },
+  { key: 'reserved', label: 'Reserved', cls: 'bg-grape' },
+  { key: 'allocated', label: 'Allocated', cls: 'bg-flamingo' },
+  { key: 'maintenance', label: 'Maintenance', cls: 'bg-grape-soft/60' },
+  { key: 'offline', label: 'Offline', cls: 'bg-white/15' },
+];
+
+function FleetOverview() {
+  // Pull the deployed GPU assets to discover which models actually exist.
+  const gpus = useQuery({
+    queryKey: ['capacity', 'fleet', 'gpus'],
+    queryFn: () => api.get<GpuAsset[]>('/v1/inventory/gpus?limit=500'),
+  });
+
+  const models = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of gpus.data ?? []) if (g.model) set.add(g.model);
+    // Order by the canonical GPU_MODELS list, unknowns last (alpha).
+    const order = new Map<string, number>(GPU_MODELS.map((m, i) => [m, i]));
+    return [...set].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999) || a.localeCompare(b));
+  }, [gpus.data]);
+
+  // One ledger query per model, in parallel.
+  const ledgers = useQueries({
+    queries: models.map((m) => ({
+      queryKey: ['capacity', 'ledger', m],
+      queryFn: () => api.get<Ledger>(`/v1/capacity/ledger?gpu_model=${encodeURIComponent(m)}`),
+      enabled: models.length > 0,
+    })),
+  });
+
+  // Incoming grouped by expected-operational month for the timeline.
+  const incoming = useQuery({
+    queryKey: ['capacity', 'incoming'],
+    queryFn: () => api.get<IncomingCapacity[]>('/v1/capacity/incoming?limit=200'),
+  });
+
+  const timeline = useMemo(() => {
+    const byMonth = new Map<string, { total: number; byModel: Map<string, number> }>();
+    for (const r of incoming.data ?? []) {
+      const d = r.expected_operational ?? r.expected_delivery;
+      const month = d ? d.slice(0, 7) : 'Unscheduled';
+      const bucket = byMonth.get(month) ?? { total: 0, byModel: new Map() };
+      bucket.total += r.quantity;
+      bucket.byModel.set(r.gpu_model, (bucket.byModel.get(r.gpu_model) ?? 0) + r.quantity);
+      byMonth.set(month, bucket);
+    }
+    return [...byMonth.entries()].sort((a, b) => {
+      if (a[0] === 'Unscheduled') return 1;
+      if (b[0] === 'Unscheduled') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [incoming.data]);
+
+  const loading = gpus.isLoading || ledgers.some((l) => l.isLoading && l.fetchStatus !== 'idle');
+
+  return (
+    <section className="flex flex-col gap-6">
+      <span className="eyebrow">FLEET · CAPACITY &amp; OVERSELLING</span>
+
+      {gpus.isError ? (
+        <ErrorState error={gpus.error} />
+      ) : loading ? (
+        <Spinner label="Building fleet overview…" />
+      ) : models.length === 0 ? (
+        <EmptyState title="No GPUs deployed yet" hint="Register GPU assets in Inventory to populate the fleet capacity view." />
+      ) : (
+        <div className="card flex flex-col gap-5">
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 text-xs text-grape-soft">
+            {SEG.map((s) => (
+              <span key={s.key} className="flex items-center gap-1.5">
+                <span className={`inline-block h-2.5 w-2.5 rounded-sm ${s.cls}`} />
+                {s.label}
+              </span>
+            ))}
+          </div>
+
+          {/* One stacked bar per model */}
+          <div className="flex flex-col gap-4">
+            {models.map((m, i) => {
+              const data = ledgers[i]?.data;
+              if (!data) return null;
+              const total = data.physical || 1;
+              const committed = data.reserved + data.allocated;
+              // Overselling = commitments exceed operational capacity.
+              const oversold = committed > data.operational;
+              return (
+                <div key={m} className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge tone="grape">{m}</Badge>
+                      <span className="text-grape-soft">{data.physical.toLocaleString('en-US')} physical</span>
+                      {oversold && <Badge tone="flamingo">OVERSOLD</Badge>}
+                    </div>
+                    <span className="text-xs text-grape-soft">
+                      {data.available.toLocaleString('en-US')} available · {committed.toLocaleString('en-US')} committed
+                    </span>
+                  </div>
+                  <div className="flex h-5 w-full overflow-hidden rounded-md bg-white/5" role="img"
+                    aria-label={`${m}: ${data.available} available, ${data.reserved} reserved, ${data.allocated} allocated of ${data.physical} physical`}>
+                    {SEG.map((s) => {
+                      const v = data[s.key] as number;
+                      if (!v) return null;
+                      return <div key={s.key} className={s.cls} style={{ width: `${(v / total) * 100}%` }} title={`${s.label}: ${v}`} />;
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Incoming supply timeline */}
+      <div className="flex flex-col gap-3">
+        <span className="eyebrow">INCOMING · TIMELINE</span>
+        {incoming.isLoading ? (
+          <Spinner label="Loading incoming timeline…" />
+        ) : incoming.isError ? (
+          <ErrorState error={incoming.error} />
+        ) : timeline.length === 0 ? (
+          <EmptyState title="No scheduled supply" hint="Add incoming capacity below to see hardware arriving over time." />
+        ) : (
+          <div className="card flex flex-col gap-3">
+            {(() => {
+              const max = Math.max(...timeline.map(([, b]) => b.total), 1);
+              return timeline.map(([month, bucket]) => (
+                <div key={month} className="flex items-center gap-3">
+                  <span className="w-24 shrink-0 text-xs font-medium text-grape-soft">
+                    {month === 'Unscheduled' ? month : formatMonth(month)}
+                  </span>
+                  <div className="flex-1">
+                    <div className="h-6 rounded-md bg-brand-gradient" style={{ width: `${(bucket.total / max) * 100}%`, minWidth: '2.5rem' }}
+                      title={[...bucket.byModel.entries()].map(([mdl, q]) => `${q}× ${mdl}`).join(', ')} />
+                  </div>
+                  <span className="w-28 shrink-0 text-right text-sm font-semibold text-white">
+                    +{bucket.total.toLocaleString('en-US')} GPUs
+                  </span>
+                </div>
+              ));
+            })()}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function formatMonth(ym: string): string {
+  const [y, m] = ym.split('-');
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }

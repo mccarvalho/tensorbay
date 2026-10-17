@@ -50,7 +50,7 @@ Multi-section: **Fleet / Utilization / Finance / Sales** with charts (recharts).
 - Turns flat lists into a navigable system
 
 ### 5. Capacity timeline + overselling view — EPIC G / plan §12  ⬜
-- NOTE: Inventory full CRUD (6 tiers) + Capacity incoming CRUD + GPU model comboboxes ✅ (finished this round); timeline/overselling-chart visualization still pending
+- NOTE: Inventory full CRUD (6 tiers) ✅; Capacity FULLY DONE ✅ — incoming CRUD + GPU comboboxes + fleet-wide per-model stacked ledger bars with OVERSOLD flag + incoming-supply timeline (dependency-free CSS/SVG bars)
 - Visual capacity ledger (physical → operational → reserved → allocated → available)
 - Incoming capacity + capacity timeline (months)
 - Overselling gap visualization

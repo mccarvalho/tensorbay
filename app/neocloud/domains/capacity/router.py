@@ -103,6 +103,7 @@ async def create_incoming(
         actor=user.subject,
         new_value=payload.model_dump(mode="json"),
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -127,6 +128,7 @@ async def update_incoming(
         actor=user.subject,
         new_value=payload.model_dump(mode="json", exclude_unset=True),
     )
+    await session.refresh(obj)
     return obj
 
 

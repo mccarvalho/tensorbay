@@ -74,6 +74,7 @@ async def create_region(payload: schemas.RegionCreate, session: Session, user: W
         actor=user.subject,
         new_value=payload.model_dump(mode="json"),
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -95,6 +96,7 @@ async def update_region(
         actor=user.subject,
         new_value=changes,
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -153,6 +155,7 @@ async def create_datacenter(
         actor=user.subject,
         new_value=payload.model_dump(mode="json"),
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -177,6 +180,7 @@ async def update_datacenter(
         actor=user.subject,
         new_value=changes,
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -234,6 +238,7 @@ async def create_cluster(payload: schemas.ClusterCreate, session: Session, user:
         actor=user.subject,
         new_value=payload.model_dump(mode="json"),
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -255,6 +260,7 @@ async def update_cluster(
         actor=user.subject,
         new_value=changes,
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -307,6 +313,7 @@ async def create_rack(payload: schemas.RackCreate, session: Session, user: Write
         actor=user.subject,
         new_value=payload.model_dump(mode="json"),
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -328,6 +335,7 @@ async def update_rack(
         actor=user.subject,
         new_value=changes,
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -380,6 +388,7 @@ async def create_server(payload: schemas.ServerCreate, session: Session, user: W
         actor=user.subject,
         new_value=payload.model_dump(mode="json"),
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -401,6 +410,7 @@ async def update_server(
         actor=user.subject,
         new_value=changes,
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -462,6 +472,7 @@ async def create_gpu(payload: schemas.GpuAssetCreate, session: Session, user: Wr
         actor=user.subject,
         new_value=payload.model_dump(mode="json"),
     )
+    await session.refresh(obj)
     return obj
 
 
@@ -483,6 +494,7 @@ async def update_gpu(
         actor=user.subject,
         new_value=payload.model_dump(mode="json", exclude_unset=True),
     )
+    await session.refresh(obj)
     return obj
 
 

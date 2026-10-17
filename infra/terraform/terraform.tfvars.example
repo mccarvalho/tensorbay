@@ -1,0 +1,56 @@
+########################################
+# NeoCloud Platform - example variables
+# Copy to terraform.tfvars and adjust. Do NOT commit real secrets.
+########################################
+
+aws_region   = "us-east-2"
+project_name = "neocloud"
+environment  = "dev"
+
+# Networking
+vpc_cidr           = "10.20.0.0/16"
+az_count           = 2
+single_nat_gateway = true # true = cheaper (dev); false = one NAT per AZ (HA)
+
+# Data layer
+aurora_engine_version    = "17.11"
+aurora_min_capacity      = 0.5
+aurora_max_capacity      = 4
+aurora_database_name     = "neocloud"
+aurora_master_username   = "neocloud_admin"
+redis_node_type          = "cache.t4g.micro"
+redis_num_cache_clusters = 2
+
+# Compute (replace container_image with your ECR image once the app is built)
+container_image       = "public.ecr.aws/docker/library/nginx:latest"
+container_port        = 8000
+service_desired_count = 2
+task_cpu              = 512
+task_memory           = 1024
+alb_internal          = false
+
+# Identity / Google Workspace SSO
+# Create an OAuth 2.0 Web Client in Google Cloud Console and paste values here,
+# or leave empty and populate the Secrets Manager entry after apply.
+google_oidc_client_id     = ""
+google_oidc_client_secret = ""
+cognito_domain_prefix     = "neocloud-dev-auth"
+cognito_callback_urls     = ["https://localhost:3000/callback"]
+cognito_logout_urls       = ["https://localhost:3000/logout"]
+
+# Observability
+log_retention_days = 30
+alarm_email        = "" # e.g. "ops@yourcompany.com"
+
+# AI document generation (Amazon Bedrock) — MSA / LOI / Proposal / Contract
+# us-east-2 Claude models require a cross-region inference profile (us. prefix).
+bedrock_model_id         = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+bedrock_enable_guardrail = true
+
+# CI/CD (GitHub Actions OIDC) — set enable_cicd=true and your repo to provision
+# the keyless deploy role. github_create_oidc_provider=false if the account
+# already has the GitHub OIDC provider.
+enable_cicd                 = false
+github_org                  = "" # e.g. "your-org"
+github_repo                 = "" # e.g. "neocloud-platform"
+github_create_oidc_provider = true

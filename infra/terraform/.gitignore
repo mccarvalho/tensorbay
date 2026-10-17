@@ -1,0 +1,21 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Keep .terraform.lock.hcl committed for reproducible provider versions.
+
+# Variable files that may contain secrets
+*.tfvars
+!terraform.tfvars.example
+
+# Plan output
+*.tfplan
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

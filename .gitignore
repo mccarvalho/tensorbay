@@ -1,0 +1,39 @@
+# ---- Secrets & state (never commit) ----
+*.tfvars
+!**/terraform.tfvars.example
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfplan
+*.pem
+*.key
+.env
+.env.*
+
+# ---- Python ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.sqlite
+*.db
+
+# ---- Node (future frontend) ----
+node_modules/
+dist/
+build/
+.next/
+
+# ---- Editor / OS / OneDrive ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+~$*
+Thumbs.db
+
+# ---- Session / local artifacts ----
+chat.json
+_tmp_*

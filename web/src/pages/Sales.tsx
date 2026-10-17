@@ -59,6 +59,8 @@ const SALES_STAGES: SalesStage[] = [
 // Main NVIDIA data-center GPU models offered (newest first), incl. VR720.
 const GPU_MODELS = [
   'VR720',
+  'GB300',
+  'B300',
   'GB200',
   'B200',
   'B100',

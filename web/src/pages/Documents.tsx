@@ -4,6 +4,7 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import { config } from '../config';
 import {
   SectionHeader,
   Spinner,
@@ -153,10 +154,12 @@ export default function Documents() {
         description="Generate MSAs, LOIs, proposals, and contracts with Claude on Amazon Bedrock, then route them through approval."
       />
 
-      {/* Generation panel */}
-      <section className="flex flex-col gap-4">
-        <span className="eyebrow">GENERATE · DRAFT</span>
-        <form className="card-glow flex flex-col gap-4" onSubmit={submit}>
+      {/* Generation panel — gated behind the aiDocs feature flag while the
+          Anthropic model-access form is pending in the Bedrock console. */}
+      {config.features.aiDocs ? (
+        <section className="flex flex-col gap-4">
+          <span className="eyebrow">GENERATE · DRAFT</span>
+          <form className="card-glow flex flex-col gap-4" onSubmit={submit}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="label" htmlFor="doc_type">Document Type</label>
@@ -223,6 +226,21 @@ export default function Documents() {
           </div>
         )}
       </section>
+      ) : (
+        <section className="flex flex-col gap-4">
+          <span className="eyebrow">GENERATE · DRAFT</span>
+          <div className="card flex flex-col items-center gap-3 py-10 text-center">
+            <div className="h-10 w-10 rounded-xl bg-brand-gradient opacity-70" aria-hidden="true" />
+            <h3 className="text-lg text-white">AI generation is being enabled</h3>
+            <p className="max-w-lg text-sm text-grape-soft">
+              Document generation with Amazon Bedrock (Claude) is wired up but
+              temporarily disabled while model access is finalized in AWS. The
+              document library below is fully functional in the meantime.
+            </p>
+            <Badge tone="warning">Coming soon</Badge>
+          </div>
+        </section>
+      )}
 
       {/* Document library */}
       <section className="flex flex-col gap-4">

@@ -21,6 +21,20 @@ resource "aws_cloudfront_distribution" "site" {
     origin_access_control_id = aws_cloudfront_origin_access_control.site.id
   }
 
+  # API origin: the application ALB (HTTP-only). CloudFront terminates TLS with
+  # the viewer and talks HTTP to the ALB inside AWS, so the browser only ever
+  # makes same-origin HTTPS calls (no mixed-content, no CORS).
+  origin {
+    domain_name = var.api_origin_domain
+    origin_id   = "alb-api"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   default_cache_behavior {
     target_origin_id       = "s3-${aws_s3_bucket.site.id}"
     viewer_protocol_policy = "redirect-to-https"
@@ -30,6 +44,22 @@ resource "aws_cloudfront_distribution" "site" {
 
     # AWS managed CachingOptimized policy.
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  }
+
+  # API behaviors -> ALB. No caching; forward everything (incl. Authorization).
+  # AllViewer origin request policy + CachingDisabled cache policy (AWS managed).
+  dynamic "ordered_cache_behavior" {
+    for_each = toset(["/v1/*", "/health", "/docs", "/openapi.json", "/redoc"])
+    content {
+      path_pattern             = ordered_cache_behavior.value
+      target_origin_id         = "alb-api"
+      viewer_protocol_policy   = "redirect-to-https"
+      allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+      cached_methods           = ["GET", "HEAD"]
+      compress                 = true
+      cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+      origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # Managed-AllViewer
+    }
   }
 
   # SPA client-side routing: any unknown path returns index.html (HTTP 200),

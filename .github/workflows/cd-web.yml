@@ -20,8 +20,9 @@ env:
   AWS_REGION: us-east-2
   S3_BUCKET: neocloud-dev-web
   CLOUDFRONT_DISTRIBUTION_ID: E2EL9X8Q231YLE
-  # Production runtime config baked into the SPA at build time.
-  VITE_API_BASE_URL: http://neocloud-dev-alb-1924778288.us-east-2.elb.amazonaws.com
+  # Same-origin: CloudFront proxies /v1/*, /health, /docs to the ALB, so the SPA
+  # calls its own origin over HTTPS (no mixed-content, no CORS).
+  VITE_API_BASE_URL: ""
   VITE_COGNITO_DOMAIN: https://neocloud-dev-auth.auth.us-east-2.amazoncognito.com
   VITE_COGNITO_CLIENT_ID: 69ua89fisqeohfmcdhc6a7d16
   VITE_COGNITO_REDIRECT_URI: https://d22xy9yyfwju3n.cloudfront.net/callback

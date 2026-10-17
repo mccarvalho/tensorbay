@@ -4,9 +4,11 @@
 // VITE_* env vars (see .env.example and the CI workflow).
 
 export const config = {
-  apiBaseUrl:
-    import.meta.env.VITE_API_BASE_URL ??
-    'http://neocloud-dev-alb-1924778288.us-east-2.elb.amazonaws.com',
+  // Same-origin by default: the SPA is served by CloudFront, which also proxies
+  // /v1/*, /health, /docs to the ALB. This keeps every request same-origin HTTPS
+  // (no mixed-content, no CORS). Override with VITE_API_BASE_URL for local dev
+  // against the raw ALB if needed.
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
 
   // Cognito hosted UI (OAuth2 authorization-code flow)
   cognito: {
@@ -26,5 +28,14 @@ export const config = {
     // Identity provider to short-circuit straight to Google, or undefined to
     // show the hosted-UI chooser (Google + native Cognito).
     googleIdp: 'Google',
+  },
+
+  // Feature flags
+  features: {
+    // AI document generation requires the Anthropic "use case details" form to
+    // be submitted in the Bedrock console (us-east-2). Until then the generate
+    // endpoint returns 500, so the UI hides the generator. Flip to true (or set
+    // VITE_AI_DOCS=1) once model access is enabled.
+    aiDocs: (import.meta.env.VITE_AI_DOCS ?? '') === '1',
   },
 } as const;

@@ -199,6 +199,7 @@ module "cicd" {
 module "frontend" {
   source = "./modules/frontend"
 
-  name_prefix = local.name_prefix
-  tags        = local.common_tags
+  name_prefix       = local.name_prefix
+  api_origin_domain = module.compute.alb_dns_name
+  tags              = local.common_tags
 }

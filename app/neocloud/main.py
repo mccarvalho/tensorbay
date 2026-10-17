@@ -1,5 +1,6 @@
 """FastAPI application factory."""
 
+# Release 1 (Commercial & Capacity Control Plane). First CD deploy trigger.
 from fastapi import FastAPI
 
 from neocloud.core.config import get_settings

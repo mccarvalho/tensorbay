@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import './index.css';
 import { ApiError } from './api';
+import { ToastProvider } from './components/toast';
 
 // Kill any stale service worker from a previous deploy and clear its caches.
 // A leftover SW can intercept /v1/* calls and return the cached SPA shell
@@ -45,7 +46,9 @@ createRoot(rootEl).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

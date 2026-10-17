@@ -62,7 +62,7 @@ Multi-section: **Fleet / Utilization / Finance / Sales** with charts (recharts).
 - Allocation status lifecycle, replace/release resources
 - Links commercial commitment to physical hardware
 
-### 7. Cross-cutting UX polish — NFR / plan §34  ⬜
+### 7. Cross-cutting UX polish — NFR / plan §34  ✅
 - Search/filter on every list, pagination controls
 - Edit + delete actions (most pages are create-only today)
 - Toasts, optimistic updates, richer loading/empty states

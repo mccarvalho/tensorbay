@@ -7,6 +7,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { hasPermission } from '../permissions';
+import { useToast, errMessage } from '../components/toast';
 import { GPU_MODELS } from '../constants';
 import {
   SectionHeader,
@@ -75,6 +76,7 @@ function allocatedCount(r: Reservation): number {
 // --------------------------------------------------------------------------- //
 export default function Reservations() {
   const qc = useQueryClient();
+  const toast = useToast();
   const canWriteRes = hasPermission('contract.write');
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -110,11 +112,13 @@ export default function Reservations() {
       }
       return api.post<Reservation>('/v1/reservations', form);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservations'] }); setOpen(false); reset(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservations'] }); toast.success(editId ? 'Reservation updated' : 'Reservation created'); setOpen(false); reset(); },
+    onError: (e) => toast.error(errMessage(e, 'Could not save reservation')),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.del<void>(`/v1/reservations/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservations'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservations'] }); toast.success('Reservation deleted'); },
+    onError: (e) => toast.error(errMessage(e, 'Could not delete reservation')),
   });
 
   function openEdit(r: Reservation) {
@@ -278,6 +282,7 @@ function AllocationsModal({ reservation, onClose, onChanged }: {
   reservation: Reservation; onClose: () => void; onChanged: () => void;
 }) {
   const qc = useQueryClient();
+  const toast = useToast();
   const canCreate = hasPermission('allocation.create');
   const canRelease = hasPermission('allocation.release');
   const base = `/v1/reservations/${reservation.id}/allocations`;
@@ -318,11 +323,13 @@ function AllocationsModal({ reservation, onClose, onChanged }: {
         status, cluster_id: clusterId || null, notes: notes || null, gpu_asset_ids: selectedGpus,
       });
     },
-    onSuccess: () => { refresh(); setShowForm(false); resetForm(); },
+    onSuccess: () => { refresh(); toast.success(editId ? 'Allocation updated' : 'Allocation created'); setShowForm(false); resetForm(); },
+    onError: (e) => toast.error(errMessage(e, 'Could not save allocation')),
   });
   const release = useMutation({
     mutationFn: (id: string) => api.post<Allocation>(`${base}/${id}/release`, {}),
-    onSuccess: refresh,
+    onSuccess: () => { refresh(); toast.success('Allocation released'); },
+    onError: (e) => toast.error(errMessage(e, 'Could not release allocation')),
   });
 
   function openEdit(a: Allocation) {

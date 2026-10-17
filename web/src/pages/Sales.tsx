@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect, useRef, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import { useToast, errMessage } from '../components/toast';
 import { decodeClaims, getSession } from '../auth';
 import { GPU_MODELS, COMMERCIAL_MODELS } from '../constants';
 import {
@@ -15,6 +16,7 @@ import {
   DataTable,
   Badge,
   Modal,
+  SearchInput,
   type BadgeTone,
   type Column,
 } from '../components/ui';
@@ -196,10 +198,12 @@ function lineTotal(it: QuoteItem): number {
 // --------------------------------------------------------------------------- //
 export default function Sales() {
   const qc = useQueryClient();
+  const toast = useToast();
   const [oppModalOpen, setOppModalOpen] = useState(false);
   const [editing, setEditing] = useState<Opportunity | null>(null);
   const [form, setForm] = useState<OpportunityInput>(emptyOpportunity);
   const [quotesFor, setQuotesFor] = useState<Opportunity | null>(null);
+  const [search, setSearch] = useState('');
 
   const oppsQuery = useQuery({
     queryKey: ['opportunities'],
@@ -219,8 +223,10 @@ export default function Sales() {
       api.post<Opportunity>('/v1/sales/opportunities', payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opportunities'] });
+      toast.success('Opportunity created');
       closeOppModal();
     },
+    onError: (e) => toast.error(errMessage(e, 'Could not create opportunity')),
   });
 
   const updateMut = useMutation({
@@ -228,8 +234,10 @@ export default function Sales() {
       api.patch<Opportunity>(`/v1/sales/opportunities/${id}`, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opportunities'] });
+      toast.success('Opportunity updated');
       closeOppModal();
     },
+    onError: (e) => toast.error(errMessage(e, 'Could not update opportunity')),
   });
 
   function openCreate() {
@@ -268,6 +276,17 @@ export default function Sales() {
     if (editing) updateMut.mutate({ id: editing.id, payload: form });
     else createMut.mutate(form);
   }
+
+  // Client-side search over the opportunities list.
+  const filteredOpps = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const opps = oppsQuery.data ?? [];
+    if (!q) return opps;
+    return opps.filter((o) =>
+      `${o.gpu_model} ${customerName(o.customer_id)} ${o.sales_stage} ${o.commercial_model} ${o.account_owner ?? ''}`
+        .toLowerCase().includes(q),
+    );
+  }, [oppsQuery.data, search, customersQuery.data]);
 
   // Pipeline KPIs (exclude LOST from weighted/open pipeline)
   const kpis = useMemo(() => {
@@ -372,6 +391,8 @@ export default function Sales() {
         ))}
       </div>
 
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by model, customer, stage, owner…" />
+
       {oppsQuery.isLoading ? (
         <Spinner label="Loading pipeline…" />
       ) : oppsQuery.isError ? (
@@ -379,9 +400,9 @@ export default function Sales() {
       ) : (
         <DataTable
           columns={columns}
-          rows={oppsQuery.data ?? []}
+          rows={filteredOpps}
           rowKey={(o) => o.id}
-          empty={<EmptyState title="No opportunities yet" hint="Create an opportunity to start building your commercial pipeline." />}
+          empty={<EmptyState title={search ? 'No matches' : 'No opportunities yet'} hint={search ? 'Try a different search.' : 'Create an opportunity to start building your commercial pipeline.'} />}
         />
       )}
 

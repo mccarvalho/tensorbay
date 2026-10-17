@@ -259,3 +259,29 @@ export function DataTable<Row>({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// SearchInput — compact client-side list filter box
+// ---------------------------------------------------------------------------
+export function SearchInput({
+  value,
+  onChange,
+  placeholder = 'Search…',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}): ReactElement {
+  return (
+    <div className="relative w-full max-w-xs">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-grape-soft">⌕</span>
+      <input
+        type="search"
+        className="input pl-8"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}

@@ -21,6 +21,13 @@ The full commercial funnel: **Opportunity → Capacity Check → Quote (line ite
 
 ---
 
+## Done
+
+### CRM — Contacts + Activity timeline (pre-proposal control)  ✅
+- Customer detail page /customers/:id with Contacts CRUD + Activity timeline
+- New backend 'activities' table (CALL/EMAIL/MEETING/NOTE/DEMO/OTHER) + nested REST + migration
+- Next-follow-up banner with overdue highlighting
+
 ## Planned (tracked, not lost)
 
 ### 2. Product Catalog & Pricing UI — EPIC C / plan §8  ⬜

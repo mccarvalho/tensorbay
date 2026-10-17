@@ -1,5 +1,6 @@
 // Customers — list + create (required fields only), matching the customer schema.
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import {
@@ -110,6 +111,16 @@ export default function Customers() {
       key: 'credit_status',
       header: 'Credit',
       render: (c) => <Badge tone={CREDIT_TONE[c.credit_status]}>{c.credit_status}</Badge>,
+    },
+    {
+      key: 'actions',
+      header: '',
+      className: 'text-right',
+      render: (c) => (
+        <Link to={`/customers/${c.id}`} className="btn-ghost px-2.5 py-1 text-xs">
+          Open CRM →
+        </Link>
+      ),
     },
   ];
 

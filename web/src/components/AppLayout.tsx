@@ -12,6 +12,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/customers', label: 'Customers' },
   { to: '/sales', label: 'Sales Pipeline' },
+  { to: '/catalog', label: 'Catalog & Pricing' },
   { to: '/contracts', label: 'Contracts' },
   { to: '/inventory', label: 'Inventory' },
   { to: '/capacity', label: 'Capacity' },

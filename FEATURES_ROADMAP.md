@@ -30,7 +30,7 @@ The full commercial funnel: **Opportunity → Capacity Check → Quote (line ite
 
 ## Planned (tracked, not lost)
 
-### 2. Product Catalog & Pricing UI — EPIC C / plan §8  ⬜
+### 2. Product Catalog & Pricing UI — EPIC C / plan §8  ✅ (SKUs, price books, prices; write-gated by pricing.write)
 - SKU management (GPU/SERVER/CLUSTER/STORAGE/NETWORK)
 - Price books (LIST/REGIONAL/CUSTOMER/CONTRACT/PROMO/RESERVED/SPOT)
 - Customer-specific & contract-specific pricing

@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { decodeClaims, getSession } from '../auth';
+import { GPU_MODELS, COMMERCIAL_MODELS } from '../constants';
 import {
   KpiCard,
   SectionHeader,
@@ -32,21 +33,6 @@ type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
 
 type AvailabilityStatus = 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE';
 
-const COMMERCIAL_MODELS = [
-  'GPU_HOURLY',
-  'GPU_MONTHLY',
-  'SERVER_HOURLY',
-  'DEDICATED_SERVER',
-  'RESERVED',
-  'COMMITMENT',
-  'PREPAID',
-  'SPOT',
-  'PRIVATE_CLUSTER',
-  'TIERED',
-  'ENTERPRISE',
-  'REVENUE_SHARE',
-] as const;
-
 const SALES_STAGES: SalesStage[] = [
   'PROSPECTING',
   'QUALIFICATION',
@@ -55,22 +41,6 @@ const SALES_STAGES: SalesStage[] = [
   'WON',
   'LOST',
 ];
-
-// Main NVIDIA data-center GPU models offered (newest first), incl. VR720.
-const GPU_MODELS = [
-  'VR720',
-  'GB300',
-  'B300',
-  'GB200',
-  'B200',
-  'B100',
-  'H200',
-  'H100',
-  'L40S',
-  'A100',
-  'A40',
-  'V100',
-] as const;
 
 /** Full name (or email) of the signed-in user, for pre-filling owner fields. */
 function currentUserName(): string {

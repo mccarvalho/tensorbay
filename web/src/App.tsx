@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
 import Sales from './pages/Sales';
+import Catalog from './pages/Catalog';
 import Contracts from './pages/Contracts';
 import Inventory from './pages/Inventory';
 import Capacity from './pages/Capacity';
@@ -32,6 +33,7 @@ export default function App(): ReactElement {
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="sales" element={<Sales />} />
+        <Route path="catalog" element={<Catalog />} />
         <Route path="contracts" element={<Contracts />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="capacity" element={<Capacity />} />

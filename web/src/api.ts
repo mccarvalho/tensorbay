@@ -31,6 +31,9 @@ async function request<T>(
     method,
     headers,
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
+    // Never read API responses from the browser HTTP cache. Prevents a stale
+    // cached 200/HTML (from an earlier broken deploy) from being replayed.
+    cache: 'no-store',
   });
 
   // Auto-refresh once on 401, then retry. Single-flight so concurrent 401s

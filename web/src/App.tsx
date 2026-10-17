@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Callback from './pages/Callback';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
+import Sales from './pages/Sales';
 import Contracts from './pages/Contracts';
 import Inventory from './pages/Inventory';
 import Capacity from './pages/Capacity';
@@ -28,6 +29,7 @@ export default function App(): ReactElement {
       >
         <Route index element={<Dashboard />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="sales" element={<Sales />} />
         <Route path="contracts" element={<Contracts />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="capacity" element={<Capacity />} />

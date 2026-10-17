@@ -1,9 +1,11 @@
 // Capacity — per-model ledger lookup, a capacity-check panel, and the
 // incoming-capacity pipeline. Both ledger and check require a gpu_model, so a
 // model input drives the view.
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, type FormEvent } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import { hasPermission } from '../permissions';
+import { GPU_MODELS } from '../constants';
 import {
   SectionHeader,
   KpiCard,
@@ -12,6 +14,7 @@ import {
   EmptyState,
   DataTable,
   Badge,
+  Modal,
   type BadgeTone,
   type Column,
 } from '../components/ui';
@@ -54,14 +57,6 @@ const CHECK_TONE: Record<CheckStatus, BadgeTone> = {
   UNAVAILABLE: 'flamingo',
 };
 
-const INCOMING_COLS: Array<Column<IncomingCapacity>> = [
-  { key: 'gpu_model', header: 'GPU Model', render: (r) => <Badge tone="grape">{r.gpu_model}</Badge> },
-  { key: 'quantity', header: 'Quantity', render: (r) => r.quantity.toLocaleString('en-US') },
-  { key: 'expected_delivery', header: 'Expected Delivery', render: (r) => r.expected_delivery ?? '—' },
-  { key: 'expected_operational', header: 'Expected Operational', render: (r) => r.expected_operational ?? '—' },
-  { key: 'purchase_order', header: 'PO', render: (r) => r.purchase_order ?? '—' },
-];
-
 export default function Capacity() {
   const [model, setModel] = useState('');
   const [submittedModel, setSubmittedModel] = useState('');
@@ -81,11 +76,6 @@ export default function Capacity() {
         `/v1/capacity/check?gpu_model=${encodeURIComponent(checkArgs!.model)}&quantity=${checkArgs!.quantity}`,
       ),
     enabled: checkArgs !== null,
-  });
-
-  const incomingQuery = useQuery({
-    queryKey: ['capacity', 'incoming'],
-    queryFn: () => api.get<IncomingCapacity[]>('/v1/capacity/incoming?limit=200'),
   });
 
   return (
@@ -111,6 +101,7 @@ export default function Capacity() {
             <input
               id="ledger_model"
               className="input"
+              list="capacity-gpu-models"
               placeholder="e.g. H100"
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -155,6 +146,7 @@ export default function Capacity() {
             <input
               id="check_model"
               className="input"
+              list="capacity-gpu-models"
               placeholder="e.g. H100"
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -209,21 +201,151 @@ export default function Capacity() {
       </section>
 
       {/* Incoming capacity */}
-      <section className="flex flex-col gap-4">
-        <span className="eyebrow">SUPPLY · INCOMING</span>
-        {incomingQuery.isLoading ? (
-          <Spinner label="Loading incoming supply…" />
-        ) : incomingQuery.isError ? (
-          <ErrorState error={incomingQuery.error} />
-        ) : (
-          <DataTable
-            columns={INCOMING_COLS}
-            rows={incomingQuery.data ?? []}
-            rowKey={(r) => r.id}
-            empty={<EmptyState title="No incoming capacity" hint="No purchase orders are in flight." />}
-          />
-        )}
-      </section>
+      <IncomingSection />
+
+      <datalist id="capacity-gpu-models">
+        {GPU_MODELS.map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
     </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+// Incoming capacity — full CRUD (writes gated by inventory.write)
+// --------------------------------------------------------------------------- //
+interface IncomingForm {
+  gpu_model: string;
+  quantity: number;
+  expected_delivery: string;
+  expected_operational: string;
+  purchase_order: string;
+  notes: string;
+}
+const emptyIncoming = (): IncomingForm => ({
+  gpu_model: 'H200', quantity: 8, expected_delivery: '', expected_operational: '', purchase_order: '', notes: '',
+});
+
+function IncomingSection() {
+  const qc = useQueryClient();
+  const canWrite = hasPermission('inventory.write');
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<IncomingForm>(emptyIncoming);
+  const reset = () => { setEditId(null); setForm(emptyIncoming()); };
+
+  const incomingQuery = useQuery({
+    queryKey: ['capacity', 'incoming'],
+    queryFn: () => api.get<IncomingCapacity[]>('/v1/capacity/incoming?limit=200'),
+  });
+
+  const save = useMutation({
+    mutationFn: () => {
+      const payload = {
+        gpu_model: form.gpu_model,
+        quantity: Number(form.quantity),
+        expected_delivery: form.expected_delivery || null,
+        expected_operational: form.expected_operational || null,
+        purchase_order: form.purchase_order || null,
+        notes: form.notes || null,
+      };
+      return editId
+        ? api.patch<IncomingCapacity>(`/v1/capacity/incoming/${editId}`, payload)
+        : api.post<IncomingCapacity>('/v1/capacity/incoming', payload);
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['capacity', 'incoming'] }); setOpen(false); reset(); },
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api.del<void>(`/v1/capacity/incoming/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['capacity', 'incoming'] }),
+  });
+
+  function openEdit(r: IncomingCapacity) {
+    setEditId(r.id);
+    setForm({
+      gpu_model: r.gpu_model, quantity: r.quantity,
+      expected_delivery: r.expected_delivery ?? '', expected_operational: r.expected_operational ?? '',
+      purchase_order: r.purchase_order ?? '', notes: r.notes ?? '',
+    });
+    setOpen(true);
+  }
+
+  const cols: Array<Column<IncomingCapacity>> = [
+    { key: 'gpu_model', header: 'GPU Model', render: (r) => <Badge tone="grape">{r.gpu_model}</Badge> },
+    { key: 'quantity', header: 'Quantity', render: (r) => r.quantity.toLocaleString('en-US') },
+    { key: 'expected_delivery', header: 'Expected Delivery', render: (r) => r.expected_delivery ?? '—' },
+    { key: 'expected_operational', header: 'Expected Operational', render: (r) => r.expected_operational ?? '—' },
+    { key: 'purchase_order', header: 'PO', render: (r) => r.purchase_order ?? '—' },
+    ...(canWrite ? [{ key: 'a', header: '', className: 'text-right', render: (r: IncomingCapacity) => (
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => openEdit(r)}>Edit</button>
+        <button type="button" className="btn-ghost px-2.5 py-1 text-xs text-flamingo"
+          onClick={() => { if (confirm(`Delete incoming ${r.quantity}× ${r.gpu_model}?`)) del.mutate(r.id); }}>Delete</button>
+      </div>) } as Column<IncomingCapacity>] : []),
+  ];
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <span className="eyebrow">SUPPLY · INCOMING</span>
+        {canWrite && <button type="button" className="btn-primary px-3 py-1.5 text-sm" onClick={() => { reset(); setOpen(true); }}>+ New Incoming</button>}
+      </div>
+      {del.isError && <ErrorState error={del.error} />}
+      {incomingQuery.isLoading ? (
+        <Spinner label="Loading incoming supply…" />
+      ) : incomingQuery.isError ? (
+        <ErrorState error={incomingQuery.error} />
+      ) : (
+        <DataTable columns={cols} rows={incomingQuery.data ?? []} rowKey={(r) => r.id}
+          empty={<EmptyState title="No incoming capacity" hint="Record purchase orders / planned hardware to feed capacity planning." />} />
+      )}
+
+      <Modal open={open} onClose={() => { setOpen(false); reset(); }} title={editId ? 'Edit Incoming Capacity' : 'New Incoming Capacity'}>
+        <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); save.mutate(); }}>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label" htmlFor="inc_model">GPU Model</label>
+              <input id="inc_model" className="input" required list="capacity-gpu-models" value={form.gpu_model}
+                onChange={(e) => setForm({ ...form, gpu_model: e.target.value })} />
+            </div>
+            <div>
+              <label className="label" htmlFor="inc_qty">Quantity</label>
+              <input id="inc_qty" type="number" min={0} className="input" required value={form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label" htmlFor="inc_del">Expected Delivery</label>
+              <input id="inc_del" type="date" className="input" value={form.expected_delivery}
+                onChange={(e) => setForm({ ...form, expected_delivery: e.target.value })} />
+            </div>
+            <div>
+              <label className="label" htmlFor="inc_op">Expected Operational</label>
+              <input id="inc_op" type="date" className="input" value={form.expected_operational}
+                onChange={(e) => setForm({ ...form, expected_operational: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="label" htmlFor="inc_po">Purchase Order</label>
+            <input id="inc_po" className="input" placeholder="PO-2026-0042" value={form.purchase_order}
+              onChange={(e) => setForm({ ...form, purchase_order: e.target.value })} />
+          </div>
+          <div>
+            <label className="label" htmlFor="inc_notes">Notes</label>
+            <textarea id="inc_notes" className="input" rows={2} value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </div>
+          {save.isError && <ErrorState error={save.error} />}
+          <div className="mt-2 flex justify-end gap-3">
+            <button type="button" className="btn-ghost" onClick={() => { setOpen(false); reset(); }}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={save.isPending}>
+              {save.isPending ? 'Saving…' : editId ? 'Save Changes' : 'Create Incoming'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </section>
   );
 }

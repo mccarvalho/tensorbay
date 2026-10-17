@@ -57,7 +57,7 @@ export function AppLayout(): ReactElement {
           className="h-9 w-9 rounded-lg"
         />
         <div className="leading-tight">
-          <div className="text-sm font-bold text-white">NeoCloud</div>
+          <div className="text-sm font-bold text-white">TensorBay</div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-grape-soft">
             Control Plane
           </div>
@@ -81,7 +81,7 @@ export function AppLayout(): ReactElement {
       </nav>
 
       <div className="border-t border-white/5 pt-4 text-[11px] text-grape-soft/70">
-        NeoCloud · TensorBay GPU Control Plane
+        TensorBay · GPU Control Plane
       </div>
     </div>
   );

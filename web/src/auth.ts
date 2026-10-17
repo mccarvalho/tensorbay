@@ -63,15 +63,23 @@ export function isAuthenticated(): boolean {
   return !!s && s.expiresAt > Date.now() + 5000;
 }
 
+// Decode a base64url JWT segment as proper UTF-8 (atob yields a Latin-1 binary
+// string, which mangles multi-byte chars like "í" -> "Ã­").
+function decodeJwtSegment(segment: string): Record<string, unknown> {
+  const b64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(b64);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  const json = new TextDecoder('utf-8').decode(bytes);
+  return JSON.parse(json);
+}
+
 export function decodeClaims(idToken: string): UserClaims {
-  const payload = JSON.parse(
-    atob(idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')),
-  );
+  const payload = decodeJwtSegment(idToken.split('.')[1]);
   return {
-    sub: payload.sub,
-    email: payload.email,
-    name: payload.name ?? payload.email,
-    groups: payload['cognito:groups'] ?? [],
+    sub: payload.sub as string,
+    email: payload.email as string | undefined,
+    name: (payload.name as string | undefined) ?? (payload.email as string | undefined),
+    groups: (payload['cognito:groups'] as string[] | undefined) ?? [],
   };
 }
 

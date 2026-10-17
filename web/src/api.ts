@@ -1,5 +1,5 @@
 import { config } from './config';
-import { getSession, refresh, logout } from './auth';
+import { getSession, refresh, clearSession } from './auth';
 
 export class ApiError extends Error {
   status: number;
@@ -17,6 +17,10 @@ async function request<T>(
   payload?: unknown,
   retried = false,
 ): Promise<T> {
+  // Once a session-expiry redirect is underway, fail fast — don't pile on.
+  if (redirecting) {
+    throw new ApiError(401, 'Session expired', null);
+  }
   const session = getSession();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (session?.accessToken) {
@@ -29,16 +33,30 @@ async function request<T>(
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
   });
 
-  // Auto-refresh once on 401, then retry.
+  // Auto-refresh once on 401, then retry. Single-flight so concurrent 401s
+  // don't each trigger a redirect storm.
   if (resp.status === 401 && !retried) {
-    const ok = await refresh();
+    const ok = await refreshOnce();
     if (ok) return request<T>(method, path, payload, true);
-    logout();
+    clearAndRedirect();
     throw new ApiError(401, 'Session expired', null);
   }
 
   const text = await resp.text();
-  const body = text ? JSON.parse(text) : null;
+  // Defensive parse: a stray HTML body (e.g. an SPA shell served by a proxy or a
+  // stale service worker) must NOT blow up with "Unexpected token '<'".
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new ApiError(
+        resp.status || 502,
+        'Unexpected non-JSON response from the API. Please hard-refresh.',
+        text.slice(0, 200),
+      );
+    }
+  }
   if (!resp.ok) {
     const detail =
       body && typeof body === 'object' && 'detail' in body
@@ -47,6 +65,28 @@ async function request<T>(
     throw new ApiError(resp.status, detail, body);
   }
   return body as T;
+}
+
+// --- single-flight refresh + clean logout --------------------------------- //
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshOnce(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = refresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+let redirecting = false;
+function clearAndRedirect(): void {
+  if (redirecting) return;
+  redirecting = true;
+  clearSession();
+  // Same-origin hard redirect to the login screen — instant and loop-proof.
+  // (Full Cognito logout is still available via the Logout button.)
+  window.location.assign('/login');
 }
 
 export const api = {

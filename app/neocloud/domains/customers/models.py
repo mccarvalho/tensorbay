@@ -4,10 +4,20 @@ A Customer is the root commercial entity. It owns Contacts and BillingAccounts
 and may form a hierarchy via a self-referencing parent_company_id.
 """
 
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import JSON, ForeignKey, Numeric, String
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from neocloud.db.base import AuditMixin, Base, UUIDMixin
@@ -34,6 +44,17 @@ class ContactType(StrEnum):
     EXECUTIVE = "EXECUTIVE"
 
 
+class ActivityType(StrEnum):
+    """Pre-proposal engagement / touchpoint types (CRM)."""
+
+    CALL = "CALL"
+    EMAIL = "EMAIL"
+    MEETING = "MEETING"
+    NOTE = "NOTE"
+    DEMO = "DEMO"
+    OTHER = "OTHER"
+
+
 class Customer(Base, UUIDMixin, AuditMixin):
     __tablename__ = "customers"
 
@@ -57,6 +78,9 @@ class Customer(Base, UUIDMixin, AuditMixin):
     contacts: Mapped[list["Contact"]] = relationship(
         back_populates="customer", cascade="all, delete-orphan"
     )
+    activities: Mapped[list["Activity"]] = relationship(
+        back_populates="customer", cascade="all, delete-orphan"
+    )
     billing_accounts: Mapped[list["BillingAccount"]] = relationship(
         back_populates="customer", cascade="all, delete-orphan"
     )
@@ -74,6 +98,31 @@ class Contact(Base, UUIDMixin, AuditMixin):
     phone: Mapped[str | None] = mapped_column(String(64))
 
     customer: Mapped["Customer"] = relationship(back_populates="contacts")
+
+
+class Activity(Base, UUIDMixin, AuditMixin):
+    """A CRM touchpoint/interaction with a customer (pre-proposal control)."""
+
+    __tablename__ = "activities"
+
+    customer_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    contact_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True
+    )
+    type: Mapped[ActivityType] = mapped_column(String(16), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    next_follow_up_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, index=True
+    )
+
+    customer: Mapped["Customer"] = relationship(back_populates="activities")
 
 
 class BillingAccount(Base, UUIDMixin, AuditMixin):

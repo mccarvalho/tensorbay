@@ -18,7 +18,11 @@ from neocloud.domains.customers.models import (
     Contact,
     Customer,
 )
+from neocloud.domains.customers.models import Activity
 from neocloud.domains.customers.schemas import (
+    ActivityCreate,
+    ActivityResponse,
+    ActivityUpdate,
     BillingAccountCreate,
     BillingAccountResponse,
     BillingAccountUpdate,
@@ -35,6 +39,7 @@ router = APIRouter(prefix="/customers", tags=["Customers"])
 ENTITY_CUSTOMER = "customer"
 ENTITY_CONTACT = "contact"
 ENTITY_BILLING_ACCOUNT = "billing_account"
+ENTITY_ACTIVITY = "activity"
 
 
 async def _get_customer_or_404(
@@ -377,5 +382,119 @@ async def delete_billing_account(
         action="delete",
         entity_type=ENTITY_BILLING_ACCOUNT,
         entity_id=account_id,
+        actor=user.subject,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Activities (CRM touchpoints, nested under a customer)
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/{customer_id}/activities", response_model=list[ActivityResponse])
+async def list_activities(
+    customer_id: str,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+    _: CurrentUser = Depends(require_permission(Permission.CUSTOMER_READ)),
+) -> list[Activity]:
+    await _get_customer_or_404(session, customer_id)
+    result = await session.execute(
+        select(Activity)
+        .where(Activity.customer_id == customer_id)
+        .order_by(Activity.occurred_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(result.scalars().all())
+
+
+@router.post(
+    "/{customer_id}/activities",
+    response_model=ActivityResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_activity(
+    customer_id: str,
+    payload: ActivityCreate,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(require_permission(Permission.CUSTOMER_WRITE)),
+) -> Activity:
+    await _get_customer_or_404(session, customer_id)
+    data = payload.model_dump(exclude_none=True)
+    activity = Activity(
+        customer_id=customer_id,
+        created_by=user.subject,
+        updated_by=user.subject,
+        **data,
+    )
+    session.add(activity)
+    await session.flush()
+    await session.refresh(activity)
+    await record_audit(
+        session,
+        action="create",
+        entity_type=ENTITY_ACTIVITY,
+        entity_id=activity.id,
+        actor=user.subject,
+        new_value=payload.model_dump(mode="json"),
+    )
+    return activity
+
+
+@router.patch(
+    "/{customer_id}/activities/{activity_id}", response_model=ActivityResponse
+)
+async def update_activity(
+    customer_id: str,
+    activity_id: str,
+    payload: ActivityUpdate,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(require_permission(Permission.CUSTOMER_WRITE)),
+) -> Activity:
+    activity = await session.get(Activity, activity_id)
+    if activity is None or activity.customer_id != customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
+        )
+    changes = payload.model_dump(exclude_unset=True)
+    for key, value in changes.items():
+        setattr(activity, key, value)
+    activity.updated_by = user.subject
+    await session.flush()
+    await session.refresh(activity)
+    await record_audit(
+        session,
+        action="update",
+        entity_type=ENTITY_ACTIVITY,
+        entity_id=activity.id,
+        actor=user.subject,
+        new_value=payload.model_dump(mode="json", exclude_unset=True),
+    )
+    return activity
+
+
+@router.delete(
+    "/{customer_id}/activities/{activity_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_activity(
+    customer_id: str,
+    activity_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(require_permission(Permission.CUSTOMER_WRITE)),
+) -> None:
+    activity = await session.get(Activity, activity_id)
+    if activity is None or activity.customer_id != customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
+        )
+    await session.delete(activity)
+    await record_audit(
+        session,
+        action="delete",
+        entity_type=ENTITY_ACTIVITY,
+        entity_id=activity_id,
         actor=user.subject,
     )

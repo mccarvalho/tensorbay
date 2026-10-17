@@ -1,12 +1,13 @@
 """Pydantic v2 schemas for Customer Management."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
 from neocloud.domains.customers.models import (
+    ActivityType,
     ContactType,
     CreditStatus,
     CustomerStatus,
@@ -87,6 +88,46 @@ class ContactResponse(ContactBase):
     customer_id: str
     created_at: datetime
     updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Activity (CRM touchpoint)
+# --------------------------------------------------------------------------- #
+
+
+class ActivityBase(BaseModel):
+    type: ActivityType
+    subject: str
+    notes: str | None = None
+    outcome: str | None = None
+    occurred_at: datetime | None = None
+    next_follow_up_date: date | None = None
+    contact_id: str | None = None
+
+
+class ActivityCreate(ActivityBase):
+    pass
+
+
+class ActivityUpdate(BaseModel):
+    type: ActivityType | None = None
+    subject: str | None = None
+    notes: str | None = None
+    outcome: str | None = None
+    occurred_at: datetime | None = None
+    next_follow_up_date: date | None = None
+    contact_id: str | None = None
+
+
+class ActivityResponse(ActivityBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    customer_id: str
+    occurred_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None = None
 
 
 # --------------------------------------------------------------------------- #

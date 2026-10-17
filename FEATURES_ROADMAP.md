@@ -44,7 +44,7 @@ Multi-section: **Fleet / Utilization / Finance / Sales** with charts (recharts).
 - Sales: pipeline GPU demand, weighted demand, capacity gap
 - Backend: `/v1/dashboards/*` (5 endpoints) — may need aggregate endpoints
 
-### 4. Entity detail / drill-down pages — plan §22 data model  ⬜
+### 4. Entity detail / drill-down pages — plan §22 data model  ✅
 - Customer → contacts, billing account, contracts, opportunities
 - Contract → items, commitments, price agreements, reservations, allocations
 - Opportunity → quotes

@@ -1,6 +1,7 @@
 // Sales Pipeline — EPIC D / plan §9.
 // Funnel: Opportunity -> Capacity Check -> Quote (with line items).
 import { useMemo, useState, useEffect, useRef, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { decodeClaims, getSession } from '../auth';
@@ -324,6 +325,7 @@ export default function Sales() {
       header: '',
       render: (o) => (
         <div className="flex justify-end gap-2">
+          <Link to={`/opportunities/${o.id}`} className="btn-ghost px-2.5 py-1 text-xs">View</Link>
           <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setQuotesFor(o)}>
             Quotes
           </button>

@@ -10,7 +10,9 @@ import {
   EmptyState,
   Badge,
   Modal,
+  DataTable,
   type BadgeTone,
+  type Column,
 } from '../components/ui';
 
 // --------------------------------------------------------------------------- //
@@ -210,6 +212,8 @@ export default function CustomerDetail() {
         </section>
       </div>
 
+      <RelatedRecords customerId={id} />
+
       {contactModal && (
         <ContactModal
           customerId={id}
@@ -356,5 +360,97 @@ function ActivityModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+// RelatedRecords — this customer's contracts, opportunities, and reservations,
+// each cross-linked to its drill-down page.
+// --------------------------------------------------------------------------- //
+interface ContractLite {
+  id: string; contract_number: string; customer_id: string; status: string; term_months: number;
+}
+interface OpportunityLite {
+  id: string; customer_id: string; gpu_model: string; quantity: number;
+  sales_stage: string; expected_mrr: string | number;
+}
+interface ReservationLite {
+  id: string; contract_id: string; customer_id: string; gpu_model: string; quantity: number; status: string;
+}
+
+const money = (v: string | number) =>
+  Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+const CONTRACT_TONE: Record<string, BadgeTone> = {
+  DRAFT: 'neutral', ACTIVE: 'success', AMENDED: 'warning', RENEWED: 'cyan', TERMINATED: 'flamingo', EXPIRED: 'neutral',
+};
+const STAGE_TONE: Record<string, BadgeTone> = {
+  PROSPECTING: 'neutral', QUALIFICATION: 'cyan', PROPOSAL: 'grape', NEGOTIATION: 'warning', WON: 'success', LOST: 'flamingo',
+};
+const RES_TONE: Record<string, BadgeTone> = {
+  PENDING: 'warning', ACTIVE: 'success', EXPIRED: 'neutral', RELEASED: 'cyan', CANCELLED: 'flamingo',
+};
+
+function RelatedRecords({ customerId }: { customerId: string }) {
+  const contractsQuery = useQuery({
+    queryKey: ['contracts', 'byCustomer', customerId],
+    queryFn: () => api.get<ContractLite[]>(`/v1/contracts?customer_id=${customerId}&limit=200`),
+  });
+  // Opportunities has no server-side customer filter; fetch and filter client-side.
+  const oppsQuery = useQuery({
+    queryKey: ['opportunities', 'all'],
+    queryFn: () => api.get<OpportunityLite[]>('/v1/sales/opportunities?limit=200'),
+  });
+  const reservationsQuery = useQuery({
+    queryKey: ['reservations', 'byCustomer', customerId],
+    queryFn: () => api.get<ReservationLite[]>(`/v1/reservations?customer_id=${customerId}&limit=200`),
+  });
+
+  const opps = (oppsQuery.data ?? []).filter((o) => o.customer_id === customerId);
+
+  const contractCols: Array<Column<ContractLite>> = [
+    { key: 'contract_number', header: 'Contract', render: (c) => <span className="font-medium text-white">{c.contract_number}</span> },
+    { key: 'status', header: 'Status', render: (c) => <Badge tone={CONTRACT_TONE[c.status] ?? 'neutral'}>{c.status}</Badge> },
+    { key: 'term_months', header: 'Term', render: (c) => `${c.term_months} mo` },
+    { key: 'view', header: '', className: 'text-right', render: (c) => <Link to={`/contracts/${c.id}`} className="btn-ghost px-2.5 py-1 text-xs">View →</Link> },
+  ];
+  const oppCols: Array<Column<OpportunityLite>> = [
+    { key: 'gpu_model', header: 'Model', render: (o) => <Badge tone="grape">{o.gpu_model}</Badge> },
+    { key: 'quantity', header: 'Qty', render: (o) => o.quantity.toLocaleString('en-US') },
+    { key: 'sales_stage', header: 'Stage', render: (o) => <Badge tone={STAGE_TONE[o.sales_stage] ?? 'neutral'}>{o.sales_stage}</Badge> },
+    { key: 'expected_mrr', header: 'MRR', render: (o) => <span className="text-cyan">{money(o.expected_mrr)}</span> },
+    { key: 'view', header: '', className: 'text-right', render: (o) => <Link to={`/opportunities/${o.id}`} className="btn-ghost px-2.5 py-1 text-xs">View →</Link> },
+  ];
+  const resCols: Array<Column<ReservationLite>> = [
+    { key: 'gpu_model', header: 'Model', render: (r) => <Badge tone="grape">{r.gpu_model}</Badge> },
+    { key: 'quantity', header: 'Qty', render: (r) => r.quantity.toLocaleString('en-US') },
+    { key: 'status', header: 'Status', render: (r) => <Badge tone={RES_TONE[r.status] ?? 'neutral'}>{r.status}</Badge> },
+    { key: 'contract', header: 'Contract', className: 'text-right', render: (r) => <Link to={`/contracts/${r.contract_id}`} className="btn-ghost px-2.5 py-1 text-xs">Contract →</Link> },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 2xl:grid-cols-3">
+      <section className="flex min-w-0 flex-col gap-3">
+        <span className="eyebrow">CONTRACTS</span>
+        {contractsQuery.isLoading ? <Spinner /> : contractsQuery.isError ? <ErrorState error={contractsQuery.error} /> : (
+          <DataTable columns={contractCols} rows={contractsQuery.data ?? []} rowKey={(c) => c.id}
+            empty={<EmptyState title="No contracts" hint="No contracts for this customer." />} />
+        )}
+      </section>
+      <section className="flex min-w-0 flex-col gap-3">
+        <span className="eyebrow">OPPORTUNITIES</span>
+        {oppsQuery.isLoading ? <Spinner /> : oppsQuery.isError ? <ErrorState error={oppsQuery.error} /> : (
+          <DataTable columns={oppCols} rows={opps} rowKey={(o) => o.id}
+            empty={<EmptyState title="No opportunities" hint="No pipeline for this customer." />} />
+        )}
+      </section>
+      <section className="flex min-w-0 flex-col gap-3">
+        <span className="eyebrow">RESERVATIONS</span>
+        {reservationsQuery.isLoading ? <Spinner /> : reservationsQuery.isError ? <ErrorState error={reservationsQuery.error} /> : (
+          <DataTable columns={resCols} rows={reservationsQuery.data ?? []} rowKey={(r) => r.id}
+            empty={<EmptyState title="No reservations" hint="No reservations for this customer." />} />
+        )}
+      </section>
+    </div>
   );
 }

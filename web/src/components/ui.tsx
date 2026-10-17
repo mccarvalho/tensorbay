@@ -45,7 +45,7 @@ export function KpiCard({ label, value, sub, accent = 'white' }: KpiCardProps): 
 export interface SectionHeaderProps {
   eyebrow: string;
   title: string;
-  description?: string;
+  description?: ReactNode;
 }
 
 export function SectionHeader({ eyebrow, title, description }: SectionHeaderProps): ReactElement {

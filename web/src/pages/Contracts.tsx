@@ -1,5 +1,6 @@
 // Contracts — list + create (required fields only).
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import {
@@ -100,6 +101,12 @@ export default function Contracts() {
       key: 'status',
       header: 'Status',
       render: (c) => <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>,
+    },
+    {
+      key: 'view',
+      header: '',
+      className: 'text-right',
+      render: (c) => <Link to={`/contracts/${c.id}`} className="btn-ghost px-2.5 py-1 text-xs">View →</Link>,
     },
   ];
 

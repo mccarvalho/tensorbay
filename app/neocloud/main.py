@@ -1,6 +1,6 @@
 """FastAPI application factory."""
 
-# Release 1 (Commercial & Capacity Control Plane). CD deploy (OIDC trust = repo wildcard).
+# Release 1 (Commercial & Capacity Control Plane). CD deploy (OIDC immutable-ID sub fix).
 from fastapi import FastAPI
 
 from neocloud.core.config import get_settings

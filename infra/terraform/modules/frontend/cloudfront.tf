@@ -44,6 +44,13 @@ resource "aws_cloudfront_distribution" "site" {
 
     # AWS managed CachingOptimized policy.
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+    # SPA client-route rewrite (request-side). Replaces the old 403/404 custom
+    # error responses so API errors are never converted to the SPA shell.
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_router.arn
+    }
   }
 
   # API behaviors -> ALB. No caching; forward everything (incl. Authorization).
@@ -60,21 +67,6 @@ resource "aws_cloudfront_distribution" "site" {
       cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
       origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # Managed-AllViewer
     }
-  }
-
-  # SPA client-side routing: any unknown path returns index.html (HTTP 200),
-  # letting react-router handle the route.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 10
-  }
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 10
   }
 
   restrictions {

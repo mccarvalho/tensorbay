@@ -11,7 +11,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 
 ## In progress
 
-### 1. Sales Pipeline UI — EPIC D / plan §9  🚧
+### 1. Sales Pipeline UI — EPIC D / plan §9  ✅
 - ✅ Account-owner directory validation: free-text autocomplete backed by GET /v1/directory/users (Cognito); stores name+email+sub; shown in an Owner column
 The full commercial funnel: **Opportunity → Capacity Check → Quote (line items)**.
 - Opportunities list + pipeline-stage KPIs (by `SalesStage`)
@@ -50,7 +50,7 @@ Multi-section: **Fleet / Utilization / Finance / Sales** with charts (recharts).
 - Opportunity → quotes
 - Turns flat lists into a navigable system
 
-### 5. Capacity timeline + overselling view — EPIC G / plan §12  ⬜
+### 5. Capacity timeline + overselling view — EPIC G / plan §12  ✅
 - NOTE: Inventory full CRUD (6 tiers) ✅; Capacity FULLY DONE ✅ — incoming CRUD + GPU comboboxes + fleet-wide per-model stacked ledger bars with OVERSOLD flag + incoming-supply timeline (dependency-free CSS/SVG bars)
 - Visual capacity ledger (physical → operational → reserved → allocated → available)
 - Incoming capacity + capacity timeline (months)

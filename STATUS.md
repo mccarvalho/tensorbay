@@ -7,15 +7,26 @@ _Last updated: 2026-10-17 (autonomous session while you were away)_
 | Layer | URL / Resource | Status |
 |-------|----------------|--------|
 | **Frontend (web UI)** | https://d22xy9yyfwju3n.cloudfront.net | ✅ Live (CloudFront + S3) |
-| **API (backend)** | http://neocloud-dev-alb-1924778288.us-east-2.elb.amazonaws.com | ✅ Live (ECS Fargate) |
-| **API docs** | …/docs (Swagger) | ✅ |
+| **API (backend)** | via CloudFront (same-origin) + ALB | ✅ Live (ECS Fargate) |
 | **Database** | Aurora PostgreSQL (27 tables) | ✅ Migrated |
 | **SSO** | Cognito + Google Workspace federation | ✅ Handshake validated |
-| **AI documents** | Bedrock Claude | ⚠️ Blocked on 1 console form (see below) |
+| **Admin portal** | `/admin` (SUPER_ADMIN only) | ✅ Invite + role management |
+| **AI documents** | Bedrock Claude | ⚠️ Disabled in UI until 1 console form (see below) |
 
 Everything was validated end-to-end: the SPA loads over HTTPS, SPA routing works,
-SSO redirects to Google, and a full authenticated CRUD round-trip
-(create → list → delete a customer, with audit trail) succeeded through the live API.
+SSO redirects to Google, a full authenticated CRUD round-trip succeeded, and the
+admin portal invites users + assigns roles (RBAC enforced: non-admins get 403).
+
+## Access control & the admin portal (NEW)
+
+- **10 roles** (Cognito groups): SUPER_ADMIN, EXECUTIVE, SALES_MANAGER, SALES,
+  FINANCE, OPERATIONS_MANAGER, OPERATIONS, CLOUD_ADMIN, CUSTOMER_ADMIN, CUSTOMER_USER.
+- **Admin portal** at `/admin` (visible only to SUPER_ADMIN): list users, **invite
+  by email** (they get a Cognito invite + sign in with Google SSO), assign/remove
+  roles, enable/disable, and delete. Backed by `/v1/admin/*`, audited, and guarded
+  by the `USER_ADMIN` permission.
+- To bootstrap: your own Google-SSO user needs the SUPER_ADMIN group once (via the
+  AWS Cognito console or CLI). After that you can manage everyone from the portal.
 
 ## What was built this session (the frontend)
 

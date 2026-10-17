@@ -57,7 +57,7 @@ Multi-section: **Fleet / Utilization / Finance / Sales** with charts (recharts).
 - Overselling gap visualization
 - Backend: `/v1/capacity/*` (7 endpoints) — ledger/check live
 
-### 6. Allocation workflow — EPIC I / plan §13  ⬜
+### 6. Allocation workflow — EPIC I / plan §13  ✅
 - Reservation → allocate to cluster / servers / GPUs
 - Allocation status lifecycle, replace/release resources
 - Links commercial commitment to physical hardware

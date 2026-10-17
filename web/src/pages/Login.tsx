@@ -32,7 +32,7 @@ export default function Login(): ReactElement {
           />
           <div>
             <span className="eyebrow">GPU Control Plane</span>
-            <h1 className="mt-2 text-2xl">Welcome to NeoCloud</h1>
+            <h1 className="mt-2 text-2xl">Welcome to TensorBay GPU Control Plane</h1>
             <p className="mt-1 text-sm text-grape-soft">
               Sign in to manage the commercial, capacity, and financial lifecycle
               of your GPU infrastructure.
@@ -66,7 +66,7 @@ export default function Login(): ReactElement {
         </div>
 
         <p className="mt-8 text-center text-xs text-grape-soft/70">
-          NeoCloud · TensorBay GPU Control Plane
+          TensorBay GPU Control Plane
         </p>
       </div>
     </div>

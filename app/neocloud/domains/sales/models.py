@@ -47,6 +47,8 @@ class Opportunity(Base, UUIDMixin, AuditMixin, TenantMixin):
         String(32), nullable=False, default=SalesStage.PROSPECTING
     )
     account_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    account_owner_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    account_owner_sub: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     quotes: Mapped[list["Quote"]] = relationship(
         back_populates="opportunity", cascade="all, delete-orphan"

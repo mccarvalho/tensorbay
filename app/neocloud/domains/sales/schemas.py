@@ -24,6 +24,8 @@ class OpportunityBase(BaseModel):
     probability: int = Field(default=0, ge=0, le=100)
     sales_stage: SalesStage = SalesStage.PROSPECTING
     account_owner: str | None = None
+    account_owner_email: str | None = None
+    account_owner_sub: str | None = None
 
 
 class OpportunityCreate(OpportunityBase):
@@ -42,6 +44,8 @@ class OpportunityUpdate(BaseModel):
     probability: int | None = Field(default=None, ge=0, le=100)
     sales_stage: SalesStage | None = None
     account_owner: str | None = None
+    account_owner_email: str | None = None
+    account_owner_sub: str | None = None
 
 
 class OpportunityRead(OpportunityBase):

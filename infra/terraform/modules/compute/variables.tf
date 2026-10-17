@@ -86,6 +86,12 @@ variable "secret_arns" {
   default     = []
 }
 
+variable "secrets_kms_key_arn" {
+  description = "KMS key ARN used to encrypt the secrets; task/exec roles need kms:Decrypt on it."
+  type        = string
+  default     = ""
+}
+
 variable "environment_variables" {
   description = "Plain (non-secret) environment variables to inject into the container."
   type        = map(string)

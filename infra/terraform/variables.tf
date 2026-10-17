@@ -228,3 +228,15 @@ variable "github_create_oidc_provider" {
   type        = bool
   default     = true
 }
+
+variable "github_subjects" {
+  description = "OIDC subject patterns allowed to assume the deploy role (e.g. 'ref:refs/heads/main', 'environment:dev')."
+  type        = list(string)
+  default     = ["ref:refs/heads/main"]
+}
+
+variable "github_sub_patterns" {
+  description = "Full verbatim OIDC sub StringLike patterns (needed for GitHub's immutable-ID subject format). If empty, github_subjects is used."
+  type        = list(string)
+  default     = []
+}

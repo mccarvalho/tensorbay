@@ -73,6 +73,7 @@ module "compute" {
     module.security.aurora_secret_arn,
     module.security.google_oidc_secret_arn
   ]
+  secrets_kms_key_arn = module.security.kms_secrets_key_arn
 
   # Non-secret runtime config injected into the container.
   environment_variables = {
@@ -81,6 +82,8 @@ module "compute" {
     BEDROCK_MODEL_ID      = var.bedrock_model_id
     DOCUMENTS_BUCKET      = aws_s3_bucket.data.bucket
     AURORA_SECRET_ARN     = module.security.aurora_secret_arn
+    AURORA_HOST           = module.data.aurora_cluster_endpoint
+    AURORA_DATABASE       = var.aurora_database_name
     GOOGLE_SSO_SECRET_ARN = module.security.google_oidc_secret_arn
     COGNITO_USER_POOL_ID  = module.identity.user_pool_id
     COGNITO_CLIENT_ID     = module.identity.user_pool_client_id
@@ -176,6 +179,8 @@ module "cicd" {
   name_prefix          = local.name_prefix
   github_org           = var.github_org
   github_repo          = var.github_repo
+  github_subjects      = var.github_subjects
+  sub_patterns         = var.github_sub_patterns
   create_oidc_provider = var.github_create_oidc_provider
   ecr_repository_arn   = module.compute.ecr_repository_arn
   passable_role_arns = [

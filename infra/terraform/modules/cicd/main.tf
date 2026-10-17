@@ -41,7 +41,9 @@ data "aws_iam_policy_document" "assume" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for s in var.github_subjects : "repo:${var.github_org}/${var.github_repo}:${s}"]
+      values = length(var.sub_patterns) > 0 ? var.sub_patterns : [
+        for s in var.github_subjects : "repo:${var.github_org}/${var.github_repo}:${s}"
+      ]
     }
   }
 }

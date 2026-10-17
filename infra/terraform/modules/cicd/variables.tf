@@ -14,9 +14,15 @@ variable "github_repo" {
 }
 
 variable "github_subjects" {
-  description = "List of OIDC subject patterns allowed to assume the role (e.g. 'ref:refs/heads/main', 'environment:production')."
+  description = "List of OIDC subject patterns allowed to assume the role (e.g. 'ref:refs/heads/main', 'environment:production'). Combined as repo:<org>/<repo>:<subject>. Ignored if sub_patterns is set."
   type        = list(string)
   default     = ["ref:refs/heads/main"]
+}
+
+variable "sub_patterns" {
+  description = "Full verbatim OIDC sub patterns (StringLike) to allow, used as-is. Needed for GitHub's immutable-ID subject format (repo:owner@id/repo@id:...). If empty, github_subjects is used."
+  type        = list(string)
+  default     = []
 }
 
 variable "create_oidc_provider" {

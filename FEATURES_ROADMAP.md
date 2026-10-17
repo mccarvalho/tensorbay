@@ -12,6 +12,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 ## In progress
 
 ### 1. Sales Pipeline UI — EPIC D / plan §9  🚧
+- ✅ Account-owner directory validation: free-text autocomplete backed by GET /v1/directory/users (Cognito); stores name+email+sub; shown in an Owner column
 The full commercial funnel: **Opportunity → Capacity Check → Quote (line items)**.
 - Opportunities list + pipeline-stage KPIs (by `SalesStage`)
 - Create/edit opportunity — supports **GPU and server** units (per decision)

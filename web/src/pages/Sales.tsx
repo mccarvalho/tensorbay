@@ -1,6 +1,6 @@
 // Sales Pipeline — EPIC D / plan §9.
 // Funnel: Opportunity -> Capacity Check -> Quote (with line items).
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, useEffect, useRef, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { decodeClaims, getSession } from '../auth';
@@ -42,15 +42,19 @@ const SALES_STAGES: SalesStage[] = [
   'LOST',
 ];
 
-/** Full name (or email) of the signed-in user, for pre-filling owner fields. */
-function currentUserName(): string {
+/** Signed-in user's identity, for pre-filling the account-owner field. */
+function currentUserOwner(): { name: string | null; email: string | null; sub: string | null } {
   const session = getSession();
-  if (!session?.idToken) return '';
+  if (!session?.idToken) return { name: null, email: null, sub: null };
   try {
     const claims = decodeClaims(session.idToken);
-    return claims.name ?? claims.email ?? '';
+    return {
+      name: claims.name ?? claims.email ?? null,
+      email: claims.email ?? null,
+      sub: claims.sub ?? null,
+    };
   } catch {
-    return '';
+    return { name: null, email: null, sub: null };
   }
 }
 
@@ -69,6 +73,8 @@ interface Opportunity {
   probability: number;
   sales_stage: SalesStage;
   account_owner: string | null;
+  account_owner_email: string | null;
+  account_owner_sub: string | null;
 }
 
 interface OpportunityInput {
@@ -82,6 +88,8 @@ interface OpportunityInput {
   probability: number;
   sales_stage: SalesStage;
   account_owner: string | null;
+  account_owner_email: string | null;
+  account_owner_sub: string | null;
 }
 
 interface QuoteItem {
@@ -172,7 +180,9 @@ function emptyOpportunity(): OpportunityInput {
     expected_mrr: 0,
     probability: 50,
     sales_stage: 'PROSPECTING',
-    account_owner: currentUserName() || null,
+    account_owner: currentUserOwner().name,
+    account_owner_email: currentUserOwner().email,
+    account_owner_sub: currentUserOwner().sub,
   };
 }
 
@@ -240,6 +250,8 @@ export default function Sales() {
       probability: o.probability,
       sales_stage: o.sales_stage,
       account_owner: o.account_owner,
+      account_owner_email: o.account_owner_email,
+      account_owner_sub: o.account_owner_sub,
     });
     setOppModalOpen(true);
   }
@@ -290,6 +302,23 @@ export default function Sales() {
     { key: 'expected_mrr', header: 'Expected MRR', render: (o) => <span className="font-semibold text-cyan">{money(o.expected_mrr)}</span> },
     { key: 'probability', header: 'Prob.', render: (o) => `${o.probability}%` },
     { key: 'sales_stage', header: 'Stage', render: (o) => <Badge tone={STAGE_TONE[o.sales_stage]}>{o.sales_stage}</Badge> },
+    {
+      key: 'account_owner',
+      header: 'Owner',
+      render: (o) =>
+        o.account_owner ? (
+          <div className="flex flex-col">
+            <span className="text-sm text-white">{o.account_owner}</span>
+            {o.account_owner_email && (
+              <span className="text-xs text-grape-soft">
+                {o.account_owner_sub ? '✓ ' : ''}{o.account_owner_email}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-grape-soft">—</span>
+        ),
+    },
     {
       key: 'actions',
       header: '',
@@ -464,10 +493,17 @@ export default function Sales() {
             </div>
             <div>
               <label className="label" htmlFor="opp_owner">Account Owner</label>
-              <input
-                id="opp_owner" className="input" placeholder="optional"
+              <OwnerAutocomplete
                 value={form.account_owner ?? ''}
-                onChange={(e) => setForm({ ...form, account_owner: e.target.value || null })}
+                email={form.account_owner_email}
+                onChange={(name, email, sub) =>
+                  setForm({
+                    ...form,
+                    account_owner: name || null,
+                    account_owner_email: email,
+                    account_owner_sub: sub,
+                  })
+                }
               />
             </div>
           </div>
@@ -748,5 +784,111 @@ function QuotesModal({
         )}
       </div>
     </Modal>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+// OwnerAutocomplete — free-text account-owner field with a real-time directory
+// dropdown. Typing keeps the free text as the name (and clears email/sub, since
+// it's no longer a verified directory match); picking a suggestion stores the
+// full {name, email, sub}. Backed by GET /v1/directory/users?q=.
+// --------------------------------------------------------------------------- //
+interface DirectoryUser {
+  sub: string;
+  email: string | null;
+  name: string | null;
+}
+
+function OwnerAutocomplete({
+  value,
+  email,
+  onChange,
+}: {
+  value: string;
+  email: string | null;
+  onChange: (name: string, email: string | null, sub: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [debounced, setDebounced] = useState(value);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Debounce the typed value before querying the directory.
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value.trim()), 200);
+    return () => clearTimeout(t);
+  }, [value]);
+
+  // Close the dropdown on outside click.
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const q = useQuery({
+    queryKey: ['directory', 'users', debounced],
+    queryFn: () =>
+      api.get<DirectoryUser[]>(
+        `/v1/directory/users${debounced ? `?q=${encodeURIComponent(debounced)}` : ''}`,
+      ),
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const results = q.data ?? [];
+
+  return (
+    <div ref={boxRef} className="relative">
+      <input
+        id="opp_owner"
+        className="input"
+        placeholder="Type a name — suggestions from your directory"
+        autoComplete="off"
+        value={value}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          // Free text: keep the typed name, drop the verified email/sub.
+          onChange(e.target.value, null, null);
+          setOpen(true);
+        }}
+      />
+      {/* Show the verified email when the current value came from a directory pick. */}
+      {email && (
+        <p className="mt-1 text-xs text-cyan">✓ {email}</p>
+      )}
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-white/10 bg-space-700 shadow-card">
+          {q.isLoading ? (
+            <div className="px-3 py-2 text-xs text-grape-soft">Searching…</div>
+          ) : results.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-grape-soft">
+              No directory match — free text will be saved as-is.
+            </div>
+          ) : (
+            results.map((u) => {
+              const display = u.name ?? u.email ?? u.sub;
+              return (
+                <button
+                  key={u.sub}
+                  type="button"
+                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition hover:bg-white/5"
+                  onClick={() => {
+                    onChange(display, u.email, u.sub);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="text-sm text-white">{display}</span>
+                  {u.email && u.email !== display && (
+                    <span className="text-xs text-grape-soft">{u.email}</span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
   );
 }

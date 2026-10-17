@@ -36,7 +36,7 @@ The full commercial funnel: **Opportunity → Capacity Check → Quote (line ite
 - Customer-specific & contract-specific pricing
 - Backend: `/v1/catalog/*` (15 endpoints) — already live, **no UI yet**
 
-### 3. Executive Dashboard rebuild — EPIC J / plan §17  ⬜
+### 3. Executive Dashboard rebuild — EPIC J / plan §17  ✅
 Multi-section: **Fleet / Utilization / Finance / Sales** with charts (recharts).
 - Fleet: installed/operational/available/reserved/allocated/maintenance, failure rate
 - Finance: MRR, ARR, contracted ARR, revenue backlog, revenue/GPU, margin

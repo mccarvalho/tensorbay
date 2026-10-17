@@ -1,10 +1,10 @@
-import { type ReactElement } from 'react';
+import { Suspense, lazy, type ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
 import RequireAuth from './components/RequireAuth';
+import { Spinner } from './components/ui';
 import Login from './pages/Login';
 import Callback from './pages/Callback';
-import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
 import Sales from './pages/Sales';
@@ -15,6 +15,9 @@ import Capacity from './pages/Capacity';
 import Reservations from './pages/Reservations';
 import Documents from './pages/Documents';
 import Admin from './pages/Admin';
+
+// Dashboard pulls in recharts — code-split it so other routes stay lean.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 
 export default function App(): ReactElement {
   return (
@@ -29,7 +32,7 @@ export default function App(): ReactElement {
           </RequireAuth>
         }
       >
-        <Route index element={<Dashboard />} />
+        <Route index element={<Suspense fallback={<Spinner label="Loading dashboard…" />}><Dashboard /></Suspense>} />
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="sales" element={<Sales />} />

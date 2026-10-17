@@ -101,6 +101,7 @@ module "identity" {
   logout_urls               = var.cognito_logout_urls
   google_oidc_client_id     = var.google_oidc_client_id
   google_oidc_client_secret = var.google_oidc_client_secret
+  task_role_name            = module.compute.task_role_name
   tags                      = local.common_tags
 }
 

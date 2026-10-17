@@ -36,3 +36,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "task_role_name" {
+  description = "ECS task role name to attach Cognito admin permissions to (for the admin portal). Empty to skip."
+  type        = string
+  default     = ""
+}

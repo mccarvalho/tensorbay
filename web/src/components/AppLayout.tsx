@@ -5,6 +5,7 @@ import { decodeClaims, getSession, logout, type UserClaims } from '../auth';
 interface NavItem {
   to: string;
   label: string;
+  role?: string; // if set, only shown to users in this Cognito group
 }
 
 const NAV: NavItem[] = [
@@ -15,6 +16,7 @@ const NAV: NavItem[] = [
   { to: '/capacity', label: 'Capacity' },
   { to: '/reservations', label: 'Reservations' },
   { to: '/documents', label: 'AI Documents' },
+  { to: '/admin', label: 'Admin', role: 'SUPER_ADMIN' },
 ];
 
 function useClaims(): UserClaims | null {
@@ -61,7 +63,9 @@ export function AppLayout(): ReactElement {
       </NavLink>
 
       <nav className="flex flex-1 flex-col gap-1">
-        {NAV.map((item) => (
+        {NAV.filter(
+          (item) => !item.role || (claims?.groups ?? []).includes(item.role),
+        ).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

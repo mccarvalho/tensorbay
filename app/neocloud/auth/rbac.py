@@ -32,6 +32,7 @@ class Permission(StrEnum):
     ALLOCATION_RELEASE = "allocation.release"
     PROVISIONING_EXECUTE = "provisioning.execute"
     DOCUMENT_GENERATE = "document.generate"
+    USER_ADMIN = "user.admin"
 
 
 _ALL = set(Permission)

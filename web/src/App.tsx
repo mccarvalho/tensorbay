@@ -11,6 +11,7 @@ import Inventory from './pages/Inventory';
 import Capacity from './pages/Capacity';
 import Reservations from './pages/Reservations';
 import Documents from './pages/Documents';
+import Admin from './pages/Admin';
 
 export default function App(): ReactElement {
   return (
@@ -32,6 +33,7 @@ export default function App(): ReactElement {
         <Route path="capacity" element={<Capacity />} />
         <Route path="reservations" element={<Reservations />} />
         <Route path="documents" element={<Documents />} />
+        <Route path="admin" element={<Admin />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

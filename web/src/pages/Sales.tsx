@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import { decodeClaims, getSession } from '../auth';
 import {
   KpiCard,
   SectionHeader,
@@ -54,6 +55,32 @@ const SALES_STAGES: SalesStage[] = [
   'WON',
   'LOST',
 ];
+
+// Main NVIDIA data-center GPU models offered (newest first), incl. VR720.
+const GPU_MODELS = [
+  'VR720',
+  'GB200',
+  'B200',
+  'B100',
+  'H200',
+  'H100',
+  'L40S',
+  'A100',
+  'A40',
+  'V100',
+] as const;
+
+/** Full name (or email) of the signed-in user, for pre-filling owner fields. */
+function currentUserName(): string {
+  const session = getSession();
+  if (!session?.idToken) return '';
+  try {
+    const claims = decodeClaims(session.idToken);
+    return claims.name ?? claims.email ?? '';
+  } catch {
+    return '';
+  }
+}
 
 const QUOTE_STATUSES: QuoteStatus[] = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
 
@@ -173,7 +200,7 @@ function emptyOpportunity(): OpportunityInput {
     expected_mrr: 0,
     probability: 50,
     sales_stage: 'PROSPECTING',
-    account_owner: null,
+    account_owner: currentUserName() || null,
   };
 }
 
@@ -383,10 +410,16 @@ export default function Sales() {
                 id="opp_model"
                 className="input"
                 required
+                list="gpu-model-options"
                 placeholder={isServerModel ? 'SERVER-8X-H200' : 'H200'}
                 value={form.gpu_model}
                 onChange={(e) => setForm({ ...form, gpu_model: e.target.value })}
               />
+              <datalist id="gpu-model-options">
+                {GPU_MODELS.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="label" htmlFor="opp_qty">Quantity ({isServerModel ? 'servers' : 'GPUs'})</label>

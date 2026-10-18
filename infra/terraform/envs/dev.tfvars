@@ -25,6 +25,12 @@ service_desired_count = 2
 # Observability
 log_retention_days = 30
 
+# Email (SES) — invite sending. mcarvalho@tensorbay.io is SES-verified in dev
+# (single-address, no DNS). Switch to no-reply@tensorbay.io once the domain is
+# DKIM-verified. Empty would fall back to Cognito's native invite + temp password.
+ses_from_email = "mcarvalho@tensorbay.io"
+app_base_url   = "https://d22xy9yyfwju3n.cloudfront.net"
+
 # CI/CD — GitHub Actions keyless deploy role (auto-deploy on push to main)
 enable_cicd                 = true
 github_org                  = "mccarvalho"

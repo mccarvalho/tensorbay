@@ -185,6 +185,18 @@ variable "alarm_email" {
   default     = ""
 }
 
+variable "ses_from_email" {
+  description = "Verified SES sender for invite/notification emails. Empty = fall back to Cognito's native invite (with temp password)."
+  type        = string
+  default     = ""
+}
+
+variable "app_base_url" {
+  description = "Public base URL of the frontend, used in invite emails (Sign in with Google link)."
+  type        = string
+  default     = "https://d22xy9yyfwju3n.cloudfront.net"
+}
+
 ############################
 # AI document generation (Amazon Bedrock)
 ############################

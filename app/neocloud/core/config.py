@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     # Storage
     documents_bucket: str | None = None
 
+    # Email (SES) — invite / notification sending
+    # Verified SES sender identity. When unset, invite emails fall back to the
+    # Cognito native invitation (with a temporary password).
+    ses_from_email: str | None = None
+    # Public base URL of the frontend, used for the "Sign in with Google" link
+    # in invite emails. Falls back to a dev default.
+    app_base_url: str = "https://d22xy9yyfwju3n.cloudfront.net"
+
     @property
     def cognito_issuer(self) -> str | None:
         if not self.cognito_user_pool_id:

@@ -31,7 +31,9 @@ class AdminService:
                 detail="Cognito user pool is not configured",
             )
         self._pool = settings.cognito_user_pool_id
+        self._settings = settings
         self._client = boto3.client("cognito-idp", region_name=settings.aws_region)
+        self._ses = boto3.client("ses", region_name=settings.aws_region)
 
     # ---- helpers ---------------------------------------------------------- #
     @staticmethod
@@ -83,23 +85,86 @@ class AdminService:
         ]
         if name:
             attrs.append({"Name": "name", "Value": name})
+
+        # Google-SSO-only: we do NOT use Cognito's native invite email (it always
+        # carries a temporary password). Instead, when a verified SES sender is
+        # configured, suppress Cognito's email and send our own branded,
+        # password-free "access granted — sign in with Google" message. If SES is
+        # not configured, fall back to Cognito's email so invites still work.
+        use_ses = bool(self._settings.ses_from_email)
+        create_kwargs: dict = {
+            "UserPoolId": self._pool,
+            "Username": email,
+            "UserAttributes": attrs,
+        }
+        if use_ses:
+            create_kwargs["MessageAction"] = "SUPPRESS"
+        else:
+            create_kwargs["DesiredDeliveryMediums"] = ["EMAIL"]
         try:
-            # DesiredDeliveryMediums=EMAIL sends the Cognito invitation email with
-            # a temporary password. The user completes signup / uses Google SSO.
-            resp = self._client.admin_create_user(
-                UserPoolId=self._pool,
-                Username=email,
-                UserAttributes=attrs,
-                DesiredDeliveryMediums=["EMAIL"],
-            )
+            resp = self._client.admin_create_user(**create_kwargs)
         except self._client.exceptions.UsernameExistsException as exc:
             raise HTTPException(
                 status_code=409, detail="A user with that email already exists"
             ) from exc
         for role in roles:
             self._add_to_group(email, role)
-        logger.info("admin_user_invited", email=email, roles=roles)
+        if use_ses:
+            self._send_invite_email(email, name)
+        logger.info(
+            "admin_user_invited", email=email, roles=roles, via="ses" if use_ses else "cognito"
+        )
         return self._to_admin_user(resp["User"], roles=roles)
+
+    def _send_invite_email(self, email: str, name: str | None) -> None:
+        """Send the branded, password-free access-granted email via SES."""
+        login_url = self._settings.app_base_url
+        greeting = f"Hi {name}," if name else "Hi,"
+        subject = "Welcome to TensorBay GPU Control Plane"
+        html = f"""\
+<div style="margin:0;padding:0;background:#0D0221;font-family:Inter,Segoe UI,Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;padding:32px 24px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:0.5px;">TensorBay</div>
+      <div style="font-size:11px;letter-spacing:3px;color:#B9A9D6;text-transform:uppercase;margin-top:4px;">GPU Control Plane</div>
+    </div>
+    <div style="background:#1a0a3a;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:28px;">
+      <h1 style="margin:0 0 12px;font-size:20px;color:#ffffff;">You've been granted access</h1>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#B9A9D6;">
+        {greeting} your TensorBay Google account <strong style="color:#ffffff;">{email}</strong>
+        now has access to the TensorBay GPU Control Plane. Just sign in with Google —
+        there's no password to set.
+      </p>
+      <a href="{login_url}"
+         style="display:block;text-align:center;background:linear-gradient(90deg,#00D4FF,#B165FB);color:#0D0221;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:12px;font-size:14px;">
+        Sign in with Google
+      </a>
+    </div>
+    <p style="text-align:center;font-size:11px;color:rgba(185,169,214,0.5);margin-top:24px;">
+      TensorBay GPU Control Plane &middot; If you didn't expect this, you can ignore this email.
+    </p>
+  </div>
+</div>"""
+        text = (
+            f"{greeting}\n\nYour TensorBay Google account {email} now has access to the "
+            f"TensorBay GPU Control Plane. Sign in with Google (no password needed):\n"
+            f"{login_url}\n\nIf you didn't expect this, you can ignore this email."
+        )
+        try:
+            self._ses.send_email(
+                Source=self._settings.ses_from_email,
+                Destination={"ToAddresses": [email]},
+                Message={
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {
+                        "Html": {"Data": html, "Charset": "UTF-8"},
+                        "Text": {"Data": text, "Charset": "UTF-8"},
+                    },
+                },
+            )
+            logger.info("invite_email_sent", email=email)
+        except Exception as exc:  # noqa: BLE001 — don't fail the invite on email error
+            logger.error("invite_email_failed", email=email, error=str(exc))
 
     def set_roles(self, username: str, roles: list[str]) -> AdminUser:
         current = set(self._groups_for(username))

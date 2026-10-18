@@ -87,6 +87,8 @@ module "compute" {
     GOOGLE_SSO_SECRET_ARN = module.security.google_oidc_secret_arn
     COGNITO_USER_POOL_ID  = module.identity.user_pool_id
     COGNITO_CLIENT_ID     = module.identity.user_pool_client_id
+    SES_FROM_EMAIL        = var.ses_from_email
+    APP_BASE_URL          = var.app_base_url
   }
 
   tags = local.common_tags

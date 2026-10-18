@@ -3,20 +3,20 @@ import { Navigate } from 'react-router-dom';
 import { isAuthenticated, login } from '../auth';
 
 export default function Login(): ReactElement {
-  const [busy, setBusy] = useState<'google' | 'email' | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (isAuthenticated()) {
     return <Navigate to="/" replace />;
   }
 
-  async function start(useGoogle: boolean): Promise<void> {
+  async function start(): Promise<void> {
     setError(null);
-    setBusy(useGoogle ? 'google' : 'email');
+    setBusy(true);
     try {
-      await login(useGoogle ? { useGoogle: true } : undefined);
+      await login({ useGoogle: true });
     } catch (e) {
-      setBusy(null);
+      setBusy(false);
       setError(e instanceof Error ? e.message : 'Unable to start sign-in.');
     }
   }
@@ -34,8 +34,8 @@ export default function Login(): ReactElement {
             <span className="eyebrow">GPU Control Plane</span>
             <h1 className="mt-2 text-2xl">Welcome to TensorBay GPU Control Plane</h1>
             <p className="mt-1 text-sm text-grape-soft">
-              Sign in to manage the commercial, capacity, and financial lifecycle
-              of your GPU infrastructure.
+              Sign in with your TensorBay Google account to manage the commercial,
+              capacity, and financial lifecycle of your GPU infrastructure.
             </p>
           </div>
         </div>
@@ -46,24 +46,19 @@ export default function Login(): ReactElement {
           </div>
         )}
 
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            className="btn-primary w-full"
-            disabled={busy !== null}
-            onClick={() => void start(true)}
-          >
-            {busy === 'google' ? 'Redirecting…' : 'Sign in with Google'}
-          </button>
-          <button
-            type="button"
-            className="btn-ghost w-full"
-            disabled={busy !== null}
-            onClick={() => void start(false)}
-          >
-            {busy === 'email' ? 'Redirecting…' : 'Sign in with email'}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn-primary w-full"
+          disabled={busy}
+          onClick={() => void start()}
+        >
+          {busy ? 'Redirecting…' : 'Sign in with Google'}
+        </button>
+
+        <p className="mt-6 text-center text-xs text-grape-soft">
+          Access is managed by your organization. Contact an administrator if you
+          need an account.
+        </p>
 
         <p className="mt-8 text-center text-xs text-grape-soft/70">
           TensorBay GPU Control Plane

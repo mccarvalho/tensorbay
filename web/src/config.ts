@@ -4,6 +4,14 @@
 // VITE_* env vars (see .env.example and the CI workflow).
 
 export const config = {
+  // Deployment environment ("dev" | "prod"). Set explicitly via VITE_ENVIRONMENT
+  // at build time; otherwise inferred from the Cognito domain (prod builds point
+  // at neocloud-prod-auth). Defaults to "dev" so the non-prod banner shows unless
+  // we're confidently in prod.
+  environment:
+    (import.meta.env.VITE_ENVIRONMENT as string | undefined) ??
+    ((import.meta.env.VITE_COGNITO_DOMAIN ?? '').includes('prod') ? 'prod' : 'dev'),
+
   // Same-origin by default: the SPA is served by CloudFront, which also proxies
   // /v1/*, /health, /docs to the ALB. This keeps every request same-origin HTTPS
   // (no mixed-content, no CORS). Override with VITE_API_BASE_URL for local dev

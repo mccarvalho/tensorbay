@@ -23,6 +23,7 @@ env:
   # Same-origin: CloudFront proxies /v1/*, /health, /docs to the ALB, so the SPA
   # calls its own origin over HTTPS (no mixed-content, no CORS).
   VITE_API_BASE_URL: ""
+  VITE_ENVIRONMENT: dev
   VITE_COGNITO_DOMAIN: https://neocloud-dev-auth.auth.us-east-2.amazoncognito.com
   VITE_COGNITO_CLIENT_ID: 69ua89fisqeohfmcdhc6a7d16
   VITE_COGNITO_REDIRECT_URI: https://d22xy9yyfwju3n.cloudfront.net/callback

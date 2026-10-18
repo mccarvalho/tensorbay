@@ -1,6 +1,7 @@
 import { type ReactElement, useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { decodeClaims, getSession, logout, type UserClaims } from '../auth';
+import { config } from '../config';
 
 interface NavItem {
   to: string;
@@ -111,6 +112,16 @@ export function AppLayout(): ReactElement {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Non-production environment banner (hidden in prod builds) */}
+        {config.environment !== 'prod' && (
+          <div
+            className="flex items-center justify-center gap-2 bg-flamingo/90 px-4 py-1.5 text-center text-xs font-semibold uppercase tracking-wider text-space-900"
+            role="status"
+          >
+            <span aria-hidden="true">⚠</span>
+            {config.environment.toUpperCase()} environment — not production. Data here is for testing only.
+          </div>
+        )}
         {/* Topbar */}
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/5 bg-space-900/80 px-4 py-3 backdrop-blur-md md:px-6">
           <div className="flex items-center gap-3">

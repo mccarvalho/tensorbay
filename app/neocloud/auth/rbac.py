@@ -23,6 +23,8 @@ class Permission(StrEnum):
     CONTRACT_WRITE = "contract.write"
     INVENTORY_READ = "inventory.read"
     INVENTORY_WRITE = "inventory.write"
+    SUPPLIER_READ = "supplier.read"
+    SUPPLIER_WRITE = "supplier.write"
     CAPACITY_READ = "capacity.read"
     PRICING_READ = "pricing.read"
     PRICING_WRITE = "pricing.write"
@@ -46,6 +48,7 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.CAPACITY_READ,
         Permission.PRICING_READ,
         Permission.BILLING_READ,
+        Permission.SUPPLIER_READ,
     },
     Role.SALES_MANAGER: {
         Permission.CUSTOMER_READ,
@@ -79,11 +82,15 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.ALLOCATION_CREATE,
         Permission.ALLOCATION_RELEASE,
         Permission.PROVISIONING_EXECUTE,
+        Permission.SUPPLIER_READ,
+        Permission.SUPPLIER_WRITE,
     },
     Role.OPERATIONS: {
         Permission.INVENTORY_READ,
         Permission.INVENTORY_WRITE,
         Permission.CAPACITY_READ,
+        Permission.SUPPLIER_READ,
+        Permission.SUPPLIER_WRITE,
     },
     Role.CLOUD_ADMIN: {
         Permission.INVENTORY_READ,

@@ -17,6 +17,7 @@ from neocloud.domains.customers import models as _customers  # noqa: F401
 from neocloud.domains.catalog import models as _catalog  # noqa: F401
 from neocloud.domains.inventory import models as _inventory  # noqa: F401
 from neocloud.domains.capacity import models as _capacity  # noqa: F401
+from neocloud.domains.suppliers import models as _suppliers  # noqa: F401
 from neocloud.domains.sales import models as _sales  # noqa: F401
 from neocloud.domains.contracts import models as _contracts  # noqa: F401
 from neocloud.domains.reservations import models as _reservations  # noqa: F401

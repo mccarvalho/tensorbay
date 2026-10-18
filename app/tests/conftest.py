@@ -44,6 +44,7 @@ from neocloud.domains.documents import models as _documents_models  # noqa: E402
 from neocloud.domains.inventory import models as _inventory_models  # noqa: E402,F401
 from neocloud.domains.reservations import models as _reservations_models  # noqa: E402,F401
 from neocloud.domains.sales import models as _sales_models  # noqa: E402,F401
+from neocloud.domains.suppliers import models as _suppliers_models  # noqa: E402,F401
 
 # One shared engine for the whole test session.
 _test_engine = create_async_engine(

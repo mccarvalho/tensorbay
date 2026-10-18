@@ -49,3 +49,23 @@ export const PRICE_BOOK_SCOPES = [
 export type CommercialModel = (typeof COMMERCIAL_MODELS)[number];
 export type SkuCategory = (typeof SKU_CATEGORIES)[number];
 export type PriceBookScope = (typeof PRICE_BOOK_SCOPES)[number];
+
+// suppliers.SupplierTier
+export const SUPPLIER_TIERS = ['OEM', 'DISTRIBUTOR', 'CLOUD', 'BROKER'] as const;
+// suppliers.SupplierStatus
+export const SUPPLIER_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+// capacity.ProcurementStatus (incoming-capacity lifecycle)
+export const PROCUREMENT_STATUSES = [
+  'NEGOTIATING',
+  'ORDERED',
+  'IN_TRANSIT',
+  'DELIVERED',
+  'OPERATIONAL',
+] as const;
+// Statuses that use estimated (expected_*) dates vs. official (actual_*) dates.
+export const ESTIMATE_STATUSES = ['NEGOTIATING', 'ORDERED', 'IN_TRANSIT'] as const;
+export const ACTUAL_STATUSES = ['DELIVERED', 'OPERATIONAL'] as const;
+
+export type SupplierTier = (typeof SUPPLIER_TIERS)[number];
+export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number];
+export type ProcurementStatus = (typeof PROCUREMENT_STATUSES)[number];

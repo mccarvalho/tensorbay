@@ -13,6 +13,7 @@ import Contracts from './pages/Contracts';
 import ContractDetail from './pages/ContractDetail';
 import OpportunityDetail from './pages/OpportunityDetail';
 import Inventory from './pages/Inventory';
+import Suppliers from './pages/Suppliers';
 import Capacity from './pages/Capacity';
 import Reservations from './pages/Reservations';
 import Documents from './pages/Documents';
@@ -43,6 +44,7 @@ export default function App(): ReactElement {
         <Route path="contracts" element={<Contracts />} />
         <Route path="contracts/:id" element={<ContractDetail />} />
         <Route path="inventory" element={<Inventory />} />
+        <Route path="suppliers" element={<Suppliers />} />
         <Route path="capacity" element={<Capacity />} />
         <Route path="reservations" element={<Reservations />} />
         <Route path="documents" element={<Documents />} />

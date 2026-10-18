@@ -5,7 +5,7 @@ import { useState, useMemo, type FormEvent } from 'react';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { hasPermission } from '../permissions';
-import { GPU_MODELS } from '../constants';
+import { GPU_MODELS, PROCUREMENT_STATUSES, ESTIMATE_STATUSES, type ProcurementStatus } from '../constants';
 import {
   SectionHeader,
   KpiCard,
@@ -45,11 +45,31 @@ interface IncomingCapacity {
   id: string;
   gpu_model: string;
   quantity: number;
+  supplier_id: string | null;
+  status: ProcurementStatus;
+  unit_price: string | null;
+  currency: string | null;
   expected_delivery: string | null;
   expected_operational: string | null;
+  actual_delivery: string | null;
+  actual_operational: string | null;
   purchase_order: string | null;
   notes: string | null;
 }
+
+interface SupplierLite {
+  id: string;
+  name: string;
+  tier: string;
+}
+
+const PROC_TONE: Record<ProcurementStatus, BadgeTone> = {
+  NEGOTIATING: 'warning',
+  ORDERED: 'cyan',
+  IN_TRANSIT: 'grape',
+  DELIVERED: 'success',
+  OPERATIONAL: 'success',
+};
 
 const CHECK_TONE: Record<CheckStatus, BadgeTone> = {
   AVAILABLE: 'success',
@@ -221,13 +241,21 @@ export default function Capacity() {
 interface IncomingForm {
   gpu_model: string;
   quantity: number;
+  supplier_id: string;
+  status: ProcurementStatus;
+  unit_price: string;
+  currency: string;
   expected_delivery: string;
   expected_operational: string;
+  actual_delivery: string;
+  actual_operational: string;
   purchase_order: string;
   notes: string;
 }
 const emptyIncoming = (): IncomingForm => ({
-  gpu_model: 'H200', quantity: 8, expected_delivery: '', expected_operational: '', purchase_order: '', notes: '',
+  gpu_model: 'H200', quantity: 8, supplier_id: '', status: 'NEGOTIATING',
+  unit_price: '', currency: 'USD', expected_delivery: '', expected_operational: '',
+  actual_delivery: '', actual_operational: '', purchase_order: '', notes: '',
 });
 
 function IncomingSection() {
@@ -243,13 +271,31 @@ function IncomingSection() {
     queryFn: () => api.get<IncomingCapacity[]>('/v1/capacity/incoming?limit=200'),
   });
 
+  const suppliersQuery = useQuery({
+    queryKey: ['suppliers', 'lite'],
+    queryFn: () => api.get<SupplierLite[]>('/v1/suppliers?limit=200'),
+  });
+  const supplierName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of suppliersQuery.data ?? []) m.set(s.id, s.name);
+    return m;
+  }, [suppliersQuery.data]);
+
+  const isEstimate = ESTIMATE_STATUSES.includes(form.status as (typeof ESTIMATE_STATUSES)[number]);
+
   const save = useMutation({
     mutationFn: () => {
       const payload = {
         gpu_model: form.gpu_model,
         quantity: Number(form.quantity),
+        supplier_id: form.supplier_id || null,
+        status: form.status,
+        unit_price: form.unit_price !== '' ? form.unit_price : null,
+        currency: form.currency || null,
         expected_delivery: form.expected_delivery || null,
         expected_operational: form.expected_operational || null,
+        actual_delivery: form.actual_delivery || null,
+        actual_operational: form.actual_operational || null,
         purchase_order: form.purchase_order || null,
         notes: form.notes || null,
       };
@@ -268,7 +314,10 @@ function IncomingSection() {
     setEditId(r.id);
     setForm({
       gpu_model: r.gpu_model, quantity: r.quantity,
+      supplier_id: r.supplier_id ?? '', status: r.status,
+      unit_price: r.unit_price ?? '', currency: r.currency ?? 'USD',
       expected_delivery: r.expected_delivery ?? '', expected_operational: r.expected_operational ?? '',
+      actual_delivery: r.actual_delivery ?? '', actual_operational: r.actual_operational ?? '',
       purchase_order: r.purchase_order ?? '', notes: r.notes ?? '',
     });
     setOpen(true);
@@ -277,8 +326,18 @@ function IncomingSection() {
   const cols: Array<Column<IncomingCapacity>> = [
     { key: 'gpu_model', header: 'GPU Model', render: (r) => <Badge tone="grape">{r.gpu_model}</Badge> },
     { key: 'quantity', header: 'Quantity', render: (r) => r.quantity.toLocaleString('en-US') },
-    { key: 'expected_delivery', header: 'Expected Delivery', render: (r) => r.expected_delivery ?? '—' },
-    { key: 'expected_operational', header: 'Expected Operational', render: (r) => r.expected_operational ?? '—' },
+    { key: 'supplier_id', header: 'Supplier', render: (r) => r.supplier_id ? (supplierName.get(r.supplier_id) ?? '—') : '—' },
+    { key: 'status', header: 'Status', render: (r) => <Badge tone={PROC_TONE[r.status]}>{r.status.replace('_', ' ')}</Badge> },
+    {
+      key: 'delivery', header: 'Delivery',
+      render: (r) => {
+        // Official date once delivered/operational, else the estimate (marked ~).
+        const actual = r.actual_delivery ?? r.actual_operational;
+        if (actual) return <span className="text-white">{actual}</span>;
+        const est = r.expected_delivery ?? r.expected_operational;
+        return est ? <span className="text-grape-soft">~{est}</span> : '—';
+      },
+    },
     { key: 'purchase_order', header: 'PO', render: (r) => r.purchase_order ?? '—' },
     ...(canWrite ? [{ key: 'a', header: '', className: 'text-right', render: (r: IncomingCapacity) => (
       <div className="flex justify-end gap-2">
@@ -320,16 +379,62 @@ function IncomingSection() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label" htmlFor="inc_del">Expected Delivery</label>
-              <input id="inc_del" type="date" className="input" value={form.expected_delivery}
-                onChange={(e) => setForm({ ...form, expected_delivery: e.target.value })} />
+              <label className="label" htmlFor="inc_supplier">Supplier</label>
+              <select id="inc_supplier" className="input" value={form.supplier_id}
+                onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}>
+                <option value="">— None —</option>
+                {(suppliersQuery.data ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.tier})</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="label" htmlFor="inc_op">Expected Operational</label>
-              <input id="inc_op" type="date" className="input" value={form.expected_operational}
-                onChange={(e) => setForm({ ...form, expected_operational: e.target.value })} />
+              <label className="label" htmlFor="inc_status">Status</label>
+              <select id="inc_status" className="input" value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as ProcurementStatus })}>
+                {PROCUREMENT_STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+              </select>
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label" htmlFor="inc_price">Unit Price (optional)</label>
+              <input id="inc_price" type="number" min={0} step="0.01" className="input" placeholder="32000.00"
+                value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} />
+            </div>
+            <div>
+              <label className="label" htmlFor="inc_ccy">Currency</label>
+              <input id="inc_ccy" className="input" maxLength={3} placeholder="USD"
+                value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} />
+            </div>
+          </div>
+          {isEstimate ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label" htmlFor="inc_del">Est. Delivery</label>
+                <input id="inc_del" type="date" className="input" value={form.expected_delivery}
+                  onChange={(e) => setForm({ ...form, expected_delivery: e.target.value })} />
+              </div>
+              <div>
+                <label className="label" htmlFor="inc_op">Est. Operational</label>
+                <input id="inc_op" type="date" className="input" value={form.expected_operational}
+                  onChange={(e) => setForm({ ...form, expected_operational: e.target.value })} />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label" htmlFor="inc_adel">Official Delivery</label>
+                <input id="inc_adel" type="date" className="input" value={form.actual_delivery}
+                  onChange={(e) => setForm({ ...form, actual_delivery: e.target.value })} />
+              </div>
+              <div>
+                <label className="label" htmlFor="inc_aop">Official Operational</label>
+                <input id="inc_aop" type="date" className="input" value={form.actual_operational}
+                  onChange={(e) => setForm({ ...form, actual_operational: e.target.value })} />
+              </div>
+            </div>
+          )}
           <div>
             <label className="label" htmlFor="inc_po">Purchase Order</label>
             <input id="inc_po" className="input" placeholder="PO-2026-0042" value={form.purchase_order}

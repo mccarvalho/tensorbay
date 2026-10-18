@@ -141,8 +141,14 @@ async def test_capacity_check_partial_with_incoming(
     client: AsyncClient, session: AsyncSession
 ) -> None:
     await _seed_h200_inventory(session)
-    # Add incoming capacity that closes the gap for a request of 10.
-    session.add(IncomingCapacity(gpu_model="H200", quantity=20))
+    # Committed incoming (ORDERED) closes the gap for a request of 10.
+    session.add(
+        IncomingCapacity(gpu_model="H200", quantity=20, status="ORDERED")
+    )
+    # A still-NEGOTIATING deal must NOT count as committed incoming supply.
+    session.add(
+        IncomingCapacity(gpu_model="H200", quantity=500, status="NEGOTIATING")
+    )
     await session.commit()
 
     resp = await client.get(
@@ -152,6 +158,7 @@ async def test_capacity_check_partial_with_incoming(
     check = resp.json()
     assert check["available"] == 3
     assert check["gap"] == 7
+    # Only the ORDERED 20 counts; the 500 NEGOTIATING is excluded.
     assert check["incoming"] == 20
     # available(3) < requested(10) but available + incoming(23) >= 10
     assert check["status"] == "PARTIALLY_AVAILABLE"

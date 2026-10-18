@@ -8,7 +8,10 @@ physical state, never from a stale cached counter.
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from neocloud.domains.capacity.models import IncomingCapacity
+from neocloud.domains.capacity.models import (
+    COMMITTED_PROCUREMENT_STATUSES,
+    IncomingCapacity,
+)
 from neocloud.domains.capacity.schemas import (
     AvailabilityCheck,
     AvailabilityStatus,
@@ -73,8 +76,16 @@ async def compute_ledger(session: AsyncSession, gpu_model: str) -> CapacityLedge
 
 
 async def _incoming_quantity(session: AsyncSession, gpu_model: str) -> int:
+    """Committed incoming supply only.
+
+    NEGOTIATING records are pipeline-only (deals not yet closed) and must not
+    count toward the overselling check; only ORDERED+ is committed supply.
+    """
     stmt = select(func.coalesce(func.sum(IncomingCapacity.quantity), 0)).where(
-        IncomingCapacity.gpu_model == gpu_model
+        IncomingCapacity.gpu_model == gpu_model,
+        IncomingCapacity.status.in_(
+            [s.value for s in COMMITTED_PROCUREMENT_STATUSES]
+        ),
     )
     return int((await session.execute(stmt)).scalar_one())
 

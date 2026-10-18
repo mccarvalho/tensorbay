@@ -45,12 +45,14 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
     from neocloud.domains.inventory.router import router as inventory_router
     from neocloud.domains.reservations.router import router as reservations_router
     from neocloud.domains.sales.router import router as sales_router
+    from neocloud.domains.suppliers.router import router as suppliers_router
 
     for r in (
         customers_router,
         catalog_router,
         inventory_router,
         capacity_router,
+        suppliers_router,
         sales_router,
         contracts_router,
         reservations_router,

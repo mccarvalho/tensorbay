@@ -24,9 +24,9 @@ service_desired_count = 2
 # Observability — longer retention for prod audit
 log_retention_days = 90
 
-# Email (SES) — not yet configured in prod; empty falls back to Cognito's native
-# invite. Set to no-reply@tensorbay.io once SES is verified in the prod account.
-ses_from_email = ""
+# Email (SES) — prod identity mcarvalho@tensorbay.io verified in the prod account
+# (sandbox). Switch to no-reply@tensorbay.io once the domain is DKIM-verified.
+ses_from_email = "mcarvalho@tensorbay.io"
 app_base_url   = "https://d268drxlb2qrjo.cloudfront.net"
 
 # CI/CD — prod needs its own GitHub OIDC provider + deploy role in this account.

@@ -75,6 +75,9 @@ module "compute" {
   ]
   secrets_kms_key_arn = module.security.kms_secrets_key_arn
 
+  # SES send permission for password-free invite emails (ses-send inline policy).
+  enable_ses_send = var.ses_from_email != ""
+
   # Non-secret runtime config injected into the container.
   environment_variables = {
     APP_ENV               = var.environment

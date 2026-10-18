@@ -98,6 +98,13 @@ variable "environment_variables" {
   default     = {}
 }
 
+# --- Task-role runtime permissions ---
+variable "enable_ses_send" {
+  description = "Grant the task role ses:SendEmail/SendRawEmail for invite notifications."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Common tags."
   type        = map(string)

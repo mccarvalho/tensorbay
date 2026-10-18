@@ -77,3 +77,19 @@ resource "aws_iam_role_policy" "task_secrets" {
     )
   })
 }
+
+# SES send (password-free invite notifications). NOTE: cognito-admin is owned by
+# the identity module and bedrock-invoke by the ai module — only SES is added here.
+resource "aws_iam_role_policy" "task_ses_send" {
+  count = var.enable_ses_send ? 1 : 0
+  name  = "${var.name_prefix}-ses-send"
+  role  = aws_iam_role.task.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+      Resource = "*"
+    }]
+  })
+}

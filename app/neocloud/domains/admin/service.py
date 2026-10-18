@@ -135,10 +135,16 @@ class AdminService:
         now has access to the TensorBay GPU Control Plane. Just sign in with Google —
         there's no password to set.
       </p>
-      <a href="{login_url}"
-         style="display:block;text-align:center;background:linear-gradient(90deg,#00D4FF,#B165FB);color:#0D0221;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:12px;font-size:14px;">
-        Sign in with Google
-      </a>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
+        <tr>
+          <td align="center" bgcolor="#00D4FF" style="background-color:#00D4FF;background:linear-gradient(90deg,#00D4FF,#B165FB);border-radius:12px;">
+            <a href="{login_url}"
+               style="display:block;text-align:center;color:#0D0221;font-weight:700;text-decoration:none;padding:14px 20px;font-size:15px;font-family:Inter,Segoe UI,Arial,sans-serif;">
+              Sign in with Google &rarr;
+            </a>
+          </td>
+        </tr>
+      </table>
     </div>
     <p style="text-align:center;font-size:11px;color:rgba(185,169,214,0.5);margin-top:24px;">
       TensorBay GPU Control Plane &middot; If you didn't expect this, you can ignore this email.

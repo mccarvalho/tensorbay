@@ -1,0 +1,118 @@
+name: CD Prod (API)
+
+# PROD is deploy-gated: it only runs on a version tag (v*) or a manual dispatch,
+# never on a plain push to main. Add required reviewers to the `prod` GitHub
+# Environment to require human approval before each prod deploy.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to build/deploy (defaults to the git SHA)"
+        required: false
+        default: ""
+
+concurrency:
+  group: cd-prod-api
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REPOSITORY: neocloud-prod-api
+  ECS_CLUSTER: neocloud-prod-cluster
+  ECS_SERVICE: neocloud-prod-api
+  ECS_CONTAINER: api
+
+jobs:
+  deploy:
+    name: Build, Push & Deploy (PROD)
+    runs-on: ubuntu-latest
+    # Protection gate: configure required reviewers on this Environment in GitHub.
+    environment: prod
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC → PROD)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.event.inputs.image_tag != '' && github.event.inputs.image_tag || github.sha }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPOSITORY"
+          docker build -t "$IMAGE:$IMAGE_TAG" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$IMAGE_TAG"
+          docker push "$IMAGE:latest"
+          echo "image=$IMAGE:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Run database migrations (one-off task)
+        run: |
+          # Resolve network + current task def, then run `alembic upgrade head`
+          # as a one-off Fargate task before shifting traffic to the new image.
+          SUBNETS=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' --output json)
+          SGS=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups' --output json)
+          TASK_ARN=$(aws ecs run-task --cluster "$ECS_CLUSTER" --task-definition "$ECS_SERVICE" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=$SUBNETS,securityGroups=$SGS,assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"'"$ECS_CONTAINER"'","command":["alembic","upgrade","head"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+          CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "Migration exit code: $CODE"
+          test "$CODE" = "0"
+
+      - name: Render new task definition
+        id: taskdef
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_SERVICE" \
+            --query 'taskDefinition' --output json > taskdef.json
+          python - "$ECS_CONTAINER" "${{ steps.build.outputs.image }}" <<'PY'
+          import json, sys
+          container, image = sys.argv[1], sys.argv[2]
+          td = json.load(open("taskdef.json"))
+          for c in td["containerDefinitions"]:
+              if c["name"] == container:
+                  c["image"] = image
+          for k in ["taskDefinitionArn","revision","status","requiresAttributes",
+                    "compatibilities","registeredAt","registeredBy"]:
+              td.pop(k, None)
+          json.dump(td, open("taskdef.new.json","w"))
+          PY
+
+      - name: Register & deploy
+        run: |
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://taskdef.new.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "Registered $NEW_ARN"
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$NEW_ARN" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
+          echo "PROD deployment stable."

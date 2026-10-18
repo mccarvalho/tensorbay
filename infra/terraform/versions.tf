@@ -12,16 +12,10 @@ terraform {
     }
   }
 
-  # Remote state backend.
-  # Left commented so `terraform init -backend=false` works for review/validation.
-  # Create the S3 bucket + DynamoDB lock table first (see README), then uncomment
-  # and run `terraform init -migrate-state`.
-  #
-  # backend "s3" {
-  #   bucket         = "neocloud-tfstate-<ACCOUNT_ID>"
-  #   key            = "release1/foundation/dev/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "neocloud-tflock"
-  #   encrypt        = true
-  # }
+  # Remote state backend (S3 + DynamoDB lock). Partial configuration: the
+  # concrete bucket/key/region/table are supplied per-environment via a
+  # -backend-config file (backend-dev.hcl / backend-prod.hcl) so each AWS
+  # account keeps its own isolated state. Run e.g.:
+  #   terraform init -reconfigure -backend-config=backend-dev.hcl
+  backend "s3" {}
 }

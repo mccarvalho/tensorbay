@@ -10,6 +10,9 @@ crash.*.log
 # Variable files that may contain secrets
 *.tfvars
 !terraform.tfvars.example
+# Per-env tfvars are non-secret (client secret passed separately at apply time).
+!envs/dev.tfvars
+!envs/prod.tfvars
 
 # Plan output
 *.tfplan

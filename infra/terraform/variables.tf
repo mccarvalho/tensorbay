@@ -203,6 +203,12 @@ variable "ses_notification_email" {
   default     = ""
 }
 
+variable "economics_alert_emails" {
+  description = "Comma-separated recipients (Super Admins/finance) alerted on sub-default-margin commission deals."
+  type        = string
+  default     = ""
+}
+
 ############################
 # AI document generation (Amazon Bedrock)
 ############################

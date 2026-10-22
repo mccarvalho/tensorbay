@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # SES configuration set for bounce/complaint tracking. When set, invite
     # emails are sent through it so events are published to SNS.
     ses_configuration_set: str | None = None
+    # Comma-separated recipients (e.g. Super Admins / finance) alerted on
+    # sub-default-margin commission deals, in addition to the deal's AM.
+    economics_alert_emails: str = ""
 
     @property
     def cognito_issuer(self) -> str | None:

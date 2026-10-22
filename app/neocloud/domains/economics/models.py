@@ -15,11 +15,11 @@ FINDER, who need not be portal users) and the versioned CommissionPlan that
 carries the rates, quota gates and default margin for a plan year.
 """
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from neocloud.db.base import AuditMixin, Base, UUIDMixin
@@ -106,4 +106,80 @@ class CommissionPlan(Base, UUIDMixin, AuditMixin):
     effective_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ArrType(StrEnum):
+    """Type of ARR a deal drives. Each role is paid on the ARR it drives."""
+
+    NEW_LOGO = "NEW_LOGO"
+    EXPANSION = "EXPANSION"
+    RENEWAL = "RENEWAL"
+
+
+class DealStatus(StrEnum):
+    """Lifecycle of a commissionable deal.
+
+    A deal becomes commissionable only after a Super Admin approves the rate,
+    finder fee and pricing. PENDING_APPROVAL -> APPROVED | REJECTED.
+    """
+
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
+class CommissionDeal(Base, UUIDMixin, AuditMixin):
+    """A commissionable deal derived from a won opportunity.
+
+    ARR is the annualized revenue (MRR x 12). Gross profit = ARR x margin_pct.
+    The deal is created PENDING_APPROVAL; a Super Admin reviews and approves the
+    commission rate, finder fee and pricing before it becomes commissionable.
+    If the margin at close is below the plan's default (30%), the approval step
+    warns the Account Manager and Super Admin.
+    """
+
+    __tablename__ = "commission_deals"
+
+    # Source linkage
+    opportunity_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    customer_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("commission_plans.id"), nullable=True, index=True
+    )
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    arr_type: Mapped[ArrType] = mapped_column(String(16), nullable=False, default=ArrType.NEW_LOGO)
+
+    # Economics
+    arr: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    margin_pct: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), nullable=False, default=Decimal("0.30")
+    )
+    # Persisted gross profit (arr * margin_pct) for reporting/queries.
+    gross_profit: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0")
+    )
+
+    # Credited reps (FK to sales_reps). AE/AM optional; finder only when referred.
+    ae_id: Mapped[str | None] = mapped_column(ForeignKey("sales_reps.id"), nullable=True, index=True)
+    am_id: Mapped[str | None] = mapped_column(ForeignKey("sales_reps.id"), nullable=True, index=True)
+    is_referred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    finder_id: Mapped[str | None] = mapped_column(
+        ForeignKey("sales_reps.id"), nullable=True, index=True
+    )
+
+    # Plan-year attribution (drives the annual quota gate). Derived from booked_date.
+    booked_date: Mapped[date] = mapped_column(Date, nullable=False)
+    plan_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Approval workflow
+    status: Mapped[DealStatus] = mapped_column(
+        String(24), nullable=False, default=DealStatus.PENDING_APPROVAL, index=True
+    )
+    margin_warning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    approved_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

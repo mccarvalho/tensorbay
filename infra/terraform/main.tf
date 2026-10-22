@@ -80,19 +80,20 @@ module "compute" {
 
   # Non-secret runtime config injected into the container.
   environment_variables = {
-    APP_ENV               = var.environment
-    AWS_REGION            = var.aws_region
-    BEDROCK_MODEL_ID      = var.bedrock_model_id
-    DOCUMENTS_BUCKET      = aws_s3_bucket.data.bucket
-    AURORA_SECRET_ARN     = module.security.aurora_secret_arn
-    AURORA_HOST           = module.data.aurora_cluster_endpoint
-    AURORA_DATABASE       = var.aurora_database_name
-    GOOGLE_SSO_SECRET_ARN = module.security.google_oidc_secret_arn
-    COGNITO_USER_POOL_ID  = module.identity.user_pool_id
-    COGNITO_CLIENT_ID     = module.identity.user_pool_client_id
-    SES_FROM_EMAIL        = var.ses_from_email
-    APP_BASE_URL          = var.app_base_url
-    SES_CONFIGURATION_SET = module.email.configuration_set_name
+    APP_ENV                = var.environment
+    AWS_REGION             = var.aws_region
+    BEDROCK_MODEL_ID       = var.bedrock_model_id
+    DOCUMENTS_BUCKET       = aws_s3_bucket.data.bucket
+    AURORA_SECRET_ARN      = module.security.aurora_secret_arn
+    AURORA_HOST            = module.data.aurora_cluster_endpoint
+    AURORA_DATABASE        = var.aurora_database_name
+    GOOGLE_SSO_SECRET_ARN  = module.security.google_oidc_secret_arn
+    COGNITO_USER_POOL_ID   = module.identity.user_pool_id
+    COGNITO_CLIENT_ID      = module.identity.user_pool_client_id
+    SES_FROM_EMAIL         = var.ses_from_email
+    APP_BASE_URL           = var.app_base_url
+    SES_CONFIGURATION_SET  = module.email.configuration_set_name
+    ECONOMICS_ALERT_EMAILS = var.economics_alert_emails
   }
 
   tags = local.common_tags

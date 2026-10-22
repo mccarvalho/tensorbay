@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from neocloud.domains.economics.models import RepStatus, RepType
+from neocloud.domains.economics.models import ArrType, DealStatus, RepStatus, RepType
 
 
 # --------------------------------------------------------------------------- #
@@ -86,5 +86,97 @@ class CommissionPlanRead(CommissionPlanBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Commission deals (Phase 2)
+# --------------------------------------------------------------------------- #
+class CommissionDealBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    customer_id: str = Field(..., max_length=36)
+    opportunity_id: str | None = Field(default=None, max_length=36)
+    plan_id: str | None = Field(default=None, max_length=36)
+    arr_type: ArrType = ArrType.NEW_LOGO
+    arr: Decimal = Field(..., ge=0)
+    margin_pct: Decimal | None = Field(default=None, ge=0, le=1)
+    ae_id: str | None = Field(default=None, max_length=36)
+    am_id: str | None = Field(default=None, max_length=36)
+    is_referred: bool = False
+    finder_id: str | None = Field(default=None, max_length=36)
+    booked_date: date
+    notes: str | None = None
+
+
+class CommissionDealCreate(CommissionDealBase):
+    pass
+
+
+class CommissionDealFromOpportunity(BaseModel):
+    """Create a deal from a won opportunity; ARR defaults to MRR x 12."""
+
+    opportunity_id: str = Field(..., max_length=36)
+    arr_type: ArrType = ArrType.NEW_LOGO
+    arr: Decimal | None = Field(default=None, ge=0)  # override; else MRR*12
+    margin_pct: Decimal | None = Field(default=None, ge=0, le=1)
+    ae_id: str | None = None
+    am_id: str | None = None
+    is_referred: bool = False
+    finder_id: str | None = None
+    booked_date: date | None = None
+    notes: str | None = None
+
+
+class CommissionDealUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=255)
+    arr_type: ArrType | None = None
+    arr: Decimal | None = Field(default=None, ge=0)
+    margin_pct: Decimal | None = Field(default=None, ge=0, le=1)
+    ae_id: str | None = None
+    am_id: str | None = None
+    is_referred: bool | None = None
+    finder_id: str | None = None
+    booked_date: date | None = None
+    notes: str | None = None
+
+
+class CommissionDealApprove(BaseModel):
+    """Super Admin approval; may adjust rate-relevant fields before approving."""
+
+    margin_pct: Decimal | None = Field(default=None, ge=0, le=1)
+    is_referred: bool | None = None
+    finder_id: str | None = None
+    acknowledge_margin_warning: bool = False
+
+
+class CommissionDealReject(BaseModel):
+    reason: str = Field(..., max_length=1024)
+
+
+class CommissionDealRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    customer_id: str
+    opportunity_id: str | None
+    plan_id: str | None
+    arr_type: ArrType
+    arr: Decimal
+    margin_pct: Decimal
+    gross_profit: Decimal
+    ae_id: str | None
+    am_id: str | None
+    is_referred: bool
+    finder_id: str | None
+    booked_date: date
+    plan_year: int
+    status: DealStatus
+    margin_warning: bool
+    approved_by: str | None
+    approved_at: datetime | None
+    rejection_reason: str | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime

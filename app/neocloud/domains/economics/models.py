@@ -183,3 +183,92 @@ class CommissionDeal(Base, UUIDMixin, AuditMixin):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class RunStatus(StrEnum):
+    DRAFT = "DRAFT"  # calculated, under review
+    FINALIZED = "FINALIZED"  # locked for payout
+
+
+class PaymentStatus(StrEnum):
+    UNPAID = "UNPAID"
+    PAID = "PAID"
+
+
+class CommissionComponent(StrEnum):
+    """Which pool a statement line belongs to."""
+
+    AE = "AE"
+    AM = "AM"
+    FINDER = "FINDER"
+
+
+class CommissionRun(Base, UUIDMixin, AuditMixin):
+    """A quarterly commission calculation run for a plan year.
+
+    Evaluates each rep's cumulative YTD position against the annual ARR quota
+    gate and produces incremental (true-up) statement lines for the quarter.
+    """
+
+    __tablename__ = "commission_runs"
+
+    plan_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    quarter: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-4
+    plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("commission_plans.id"), nullable=True
+    )
+    status: Mapped[RunStatus] = mapped_column(
+        String(16), nullable=False, default=RunStatus.DRAFT
+    )
+    # Totals (sum of all statement lines in this run).
+    total_commission: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0")
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class CommissionStatement(Base, UUIDMixin, AuditMixin):
+    """A per-rep, per-run line: the incremental commission for the quarter.
+
+    Carries the full breakdown so the number is auditable: the rep's YTD ARR,
+    whether the annual gate was cleared, YTD gross profit, YTD earned, prior
+    quarters already paid, and the resulting incremental amount.
+    """
+
+    __tablename__ = "commission_statements"
+
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("commission_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rep_id: Mapped[str] = mapped_column(
+        ForeignKey("sales_reps.id"), nullable=False, index=True
+    )
+    component: Mapped[CommissionComponent] = mapped_column(String(8), nullable=False)
+    plan_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    quarter: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Audit breakdown
+    ytd_arr: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0"))
+    quota_arr: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0"))
+    gate_cleared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False, default=Decimal("0"))
+    ytd_gross_profit: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0")
+    )
+    ytd_earned: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0")
+    )
+    prior_paid: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0")
+    )
+    # The incremental amount owed for THIS quarter (ytd_earned - prior_paid).
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0")
+    )
+
+    # Payment tracking
+    payment_status: Mapped[PaymentStatus] = mapped_column(
+        String(8), nullable=False, default=PaymentStatus.UNPAID
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)

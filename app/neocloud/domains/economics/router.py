@@ -22,7 +22,11 @@ from neocloud.domains.economics import service as economics_service
 from neocloud.domains.economics.models import (
     CommissionDeal,
     CommissionPlan,
+    CommissionRun,
+    CommissionStatement,
     DealStatus,
+    PaymentStatus,
+    RunStatus,
     RepType,
     SalesRep,
 )
@@ -36,9 +40,14 @@ from neocloud.domains.economics.schemas import (
     CommissionPlanCreate,
     CommissionPlanRead,
     CommissionPlanUpdate,
+    CommissionRunCreate,
+    CommissionRunDetail,
+    CommissionRunRead,
+    CommissionStatementRead,
     SalesRepCreate,
     SalesRepRead,
     SalesRepUpdate,
+    StatementMarkPaid,
 )
 from neocloud.domains.sales.models import Opportunity
 
@@ -569,3 +578,193 @@ async def reject_deal(
     )
     await session.refresh(deal)
     return deal
+
+
+# --------------------------------------------------------------------------- #
+# Commission runs & statements (Phase 3) - quarterly calculation + payout
+# --------------------------------------------------------------------------- #
+async def _get_run_or_404(session: AsyncSession, run_id: str) -> CommissionRun:
+    obj = await session.get(CommissionRun, run_id)
+    if obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"CommissionRun {run_id} not found",
+        )
+    return obj
+
+
+@router.post(
+    "/runs", response_model=CommissionRunDetail, status_code=status.HTTP_201_CREATED
+)
+async def create_run(payload: CommissionRunCreate, session: Session, user: WriteUser):
+    """Calculate a quarterly commission run (annual gate, quarterly true-up)."""
+    plan = await _active_plan_for_year(session, payload.plan_year)
+    if plan is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No active commission plan for {payload.plan_year}",
+        )
+
+    # Approved deals for the plan year.
+    deals = (
+        await session.execute(
+            select(CommissionDeal).where(
+                CommissionDeal.plan_year == payload.plan_year,
+                CommissionDeal.status == DealStatus.APPROVED,
+            )
+        )
+    ).scalars().all()
+    reps = (await session.execute(select(SalesRep))).scalars().all()
+
+    # Prior-quarter paid amounts this year, keyed by (rep_id, component).
+    prior_rows = (
+        await session.execute(
+            select(
+                CommissionStatement.rep_id,
+                CommissionStatement.component,
+                CommissionStatement.amount,
+            ).where(
+                CommissionStatement.plan_year == payload.plan_year,
+                CommissionStatement.quarter < payload.quarter,
+            )
+        )
+    ).all()
+    prior_paid_by_key: dict[tuple[str, str], Decimal] = {}
+    for rep_id, component, amount in prior_rows:
+        key = (rep_id, component.value if hasattr(component, "value") else str(component))
+        prior_paid_by_key[key] = prior_paid_by_key.get(key, Decimal("0")) + Decimal(amount)
+
+    lines = economics_service.compute_quarter_lines(
+        plan=plan,
+        reps=list(reps),
+        approved_deals=list(deals),
+        quarter=payload.quarter,
+        prior_paid_by_key=prior_paid_by_key,
+    )
+
+    run = CommissionRun(
+        plan_year=payload.plan_year,
+        quarter=payload.quarter,
+        plan_id=plan.id,
+        status=RunStatus.DRAFT,
+        notes=payload.notes,
+        created_by=user.subject,
+        updated_by=user.subject,
+    )
+    session.add(run)
+    await session.flush()
+
+    total = Decimal("0")
+    for ln in lines:
+        stmt = CommissionStatement(
+            run_id=run.id,
+            rep_id=ln.rep_id,
+            component=ln.component,
+            plan_year=payload.plan_year,
+            quarter=payload.quarter,
+            ytd_arr=ln.ytd_arr,
+            quota_arr=ln.quota_arr,
+            gate_cleared=ln.gate_cleared,
+            rate=ln.rate,
+            ytd_gross_profit=ln.ytd_gross_profit,
+            ytd_earned=ln.ytd_earned,
+            prior_paid=ln.prior_paid,
+            amount=ln.amount,
+            created_by=user.subject,
+            updated_by=user.subject,
+        )
+        session.add(stmt)
+        total += ln.amount
+    run.total_commission = total.quantize(Decimal("0.01"))
+    await session.flush()
+    await record_audit(
+        session, action="create", entity_type="commission_run", entity_id=run.id,
+        actor=user.subject,
+        new_value={"plan_year": payload.plan_year, "quarter": payload.quarter, "total": str(run.total_commission)},
+    )
+
+    statements = (
+        await session.execute(
+            select(CommissionStatement).where(CommissionStatement.run_id == run.id)
+        )
+    ).scalars().all()
+    await session.refresh(run)
+    detail = CommissionRunDetail.model_validate(run)
+    detail.statements = [CommissionStatementRead.model_validate(s) for s in statements]
+    return detail
+
+
+@router.get("/runs", response_model=list[CommissionRunRead])
+async def list_runs(
+    session: Session,
+    _user: ReadUser,
+    plan_year: int | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    stmt = select(CommissionRun).order_by(
+        CommissionRun.plan_year.desc(), CommissionRun.quarter.desc()
+    )
+    if plan_year:
+        stmt = stmt.where(CommissionRun.plan_year == plan_year)
+    result = await session.execute(stmt.limit(limit).offset(offset))
+    return result.scalars().all()
+
+
+@router.get("/runs/{run_id}", response_model=CommissionRunDetail)
+async def get_run(run_id: str, session: Session, user: ReadUser):
+    run = await _get_run_or_404(session, run_id)
+    stmt = select(CommissionStatement).where(CommissionStatement.run_id == run_id)
+    # Rep-scoping: non-privileged users only see their own statement lines.
+    if not _is_privileged(user):
+        rep_ids = await _rep_ids_for_user(session, user)
+        if not rep_ids:
+            detail = CommissionRunDetail.model_validate(run)
+            detail.statements = []
+            return detail
+        stmt = stmt.where(CommissionStatement.rep_id.in_(rep_ids))
+    statements = (await session.execute(stmt)).scalars().all()
+    detail = CommissionRunDetail.model_validate(run)
+    detail.statements = [CommissionStatementRead.model_validate(s) for s in statements]
+    return detail
+
+
+@router.post("/runs/{run_id}/finalize", response_model=CommissionRunRead)
+async def finalize_run(run_id: str, session: Session, user: ApproveUser):
+    run = await _get_run_or_404(session, run_id)
+    if run.status == RunStatus.FINALIZED:
+        raise HTTPException(status_code=409, detail="Run already finalized")
+    run.status = RunStatus.FINALIZED
+    run.updated_by = user.subject
+    await session.flush()
+    await record_audit(
+        session, action="finalize", entity_type="commission_run", entity_id=run.id,
+        actor=user.subject,
+    )
+    await session.refresh(run)
+    return run
+
+
+@router.post(
+    "/statements/{statement_id}/mark-paid", response_model=CommissionStatementRead
+)
+async def mark_statement_paid(
+    statement_id: str, payload: StatementMarkPaid, session: Session, user: WriteUser
+):
+    from datetime import datetime, timezone
+
+    stmt = await session.get(CommissionStatement, statement_id)
+    if stmt is None:
+        raise HTTPException(status_code=404, detail="Statement not found")
+    stmt.payment_status = PaymentStatus.PAID
+    stmt.paid_at = datetime.now(timezone.utc)
+    stmt.payment_reference = payload.payment_reference
+    stmt.updated_by = user.subject
+    await session.flush()
+    await record_audit(
+        session, action="mark_paid", entity_type="commission_statement",
+        entity_id=statement_id, actor=user.subject,
+        new_value={"payment_reference": payload.payment_reference},
+    )
+    await session.refresh(stmt)
+    return stmt

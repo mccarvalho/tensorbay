@@ -180,3 +180,65 @@ class CommissionDealRead(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Commission runs & statements (Phase 3)
+# --------------------------------------------------------------------------- #
+from neocloud.domains.economics.models import (  # noqa: E402
+    CommissionComponent,
+    PaymentStatus,
+    RunStatus,
+)
+
+
+class CommissionRunCreate(BaseModel):
+    plan_year: int = Field(..., ge=2020, le=2100)
+    quarter: int = Field(..., ge=1, le=4)
+    notes: str | None = None
+
+
+class CommissionStatementRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    run_id: str
+    rep_id: str
+    component: CommissionComponent
+    plan_year: int
+    quarter: int
+    ytd_arr: Decimal
+    quota_arr: Decimal
+    gate_cleared: bool
+    rate: Decimal
+    ytd_gross_profit: Decimal
+    ytd_earned: Decimal
+    prior_paid: Decimal
+    amount: Decimal
+    payment_status: PaymentStatus
+    paid_at: datetime | None
+    payment_reference: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommissionRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    plan_year: int
+    quarter: int
+    plan_id: str | None
+    status: RunStatus
+    total_commission: Decimal
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommissionRunDetail(CommissionRunRead):
+    statements: list[CommissionStatementRead] = Field(default_factory=list)
+
+
+class StatementMarkPaid(BaseModel):
+    payment_reference: str | None = Field(default=None, max_length=255)

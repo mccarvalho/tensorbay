@@ -106,3 +106,122 @@ def send_margin_warning_email(
         logger.info("margin_warning_email_sent", deal=deal_name, recipients=len(recipients))
     except Exception as exc:  # noqa: BLE001 - never block approval on email
         logger.warning("margin_warning_email_failed", deal=deal_name, error=str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# Quarterly commission calculation (annual gate, quarterly true-up)
+# --------------------------------------------------------------------------- #
+from dataclasses import dataclass  # noqa: E402
+
+from neocloud.domains.economics.models import (  # noqa: E402
+    ArrType,  # noqa: F401
+    CommissionComponent,
+    CommissionDeal,
+    CommissionPlan,
+    DealStatus,
+    RepType,
+    SalesRep,
+)
+
+_QUARTER_END_MONTH = {1: 3, 2: 6, 3: 9, 4: 12}
+
+
+@dataclass
+class StatementLine:
+    rep_id: str
+    component: CommissionComponent
+    ytd_arr: Decimal
+    quota_arr: Decimal
+    gate_cleared: bool
+    rate: Decimal
+    ytd_gross_profit: Decimal
+    ytd_earned: Decimal
+    prior_paid: Decimal
+    amount: Decimal
+
+
+def _q(x: Decimal) -> Decimal:
+    return Decimal(x).quantize(Decimal("0.01"))
+
+
+def compute_quarter_lines(
+    *,
+    plan: CommissionPlan,
+    reps: list[SalesRep],
+    approved_deals: list[CommissionDeal],
+    quarter: int,
+    prior_paid_by_key: dict[tuple[str, str], Decimal],
+) -> list[StatementLine]:
+    """Compute per-rep incremental commission lines for a quarter.
+
+    ``approved_deals`` must already be filtered to APPROVED deals of the plan
+    year. Only deals booked on/before the quarter-end month count toward YTD.
+    ``prior_paid_by_key`` maps (rep_id, component) -> amount already paid in
+    earlier quarters of the same year (for the true-up).
+
+    AE/AM: a role-rate (10%) applied to the YTD gross profit of the deals the
+    rep is credited on, but ZERO until the rep's cumulative YTD ARR clears the
+    annual quota gate. FINDER: 3% of GP on referred deals, no gate.
+    """
+    end_month = _QUARTER_END_MONTH[quarter]
+    ytd_deals = [
+        d
+        for d in approved_deals
+        if d.status == DealStatus.APPROVED and d.booked_date.month <= end_month
+    ]
+
+    reps_by_id = {r.id: r for r in reps}
+    lines: list[StatementLine] = []
+
+    for rep in reps:
+        if rep.type == RepType.AE:
+            component = CommissionComponent.AE
+            rate = plan.ae_rate
+            quota = plan.ae_quota_arr
+            rep_deals = [d for d in ytd_deals if d.ae_id == rep.id]
+        elif rep.type == RepType.AM:
+            component = CommissionComponent.AM
+            rate = plan.am_rate
+            quota = plan.am_quota_arr
+            rep_deals = [d for d in ytd_deals if d.am_id == rep.id]
+        else:  # FINDER
+            component = CommissionComponent.FINDER
+            rate = plan.finder_rate
+            quota = Decimal("0")
+            rep_deals = [d for d in ytd_deals if d.is_referred and d.finder_id == rep.id]
+
+        if not rep_deals:
+            continue
+
+        ytd_arr = _q(sum((d.arr for d in rep_deals), Decimal("0")))
+        ytd_gp = _q(sum((d.gross_profit for d in rep_deals), Decimal("0")))
+
+        if component == CommissionComponent.FINDER:
+            gate_cleared = True  # no gate for finders
+            ytd_earned = _q(ytd_gp * rate)
+        else:
+            gate_cleared = ytd_arr >= quota
+            ytd_earned = _q(ytd_gp * rate) if gate_cleared else Decimal("0.00")
+
+        prior = _q(prior_paid_by_key.get((rep.id, component.value), Decimal("0")))
+        amount = _q(ytd_earned - prior)
+        # Never claw back a prior overpayment within the year via a negative line.
+        if amount < 0:
+            amount = Decimal("0.00")
+
+        lines.append(
+            StatementLine(
+                rep_id=rep.id,
+                component=component,
+                ytd_arr=ytd_arr,
+                quota_arr=_q(quota),
+                gate_cleared=gate_cleared,
+                rate=rate,
+                ytd_gross_profit=ytd_gp,
+                ytd_earned=ytd_earned,
+                prior_paid=prior,
+                amount=amount,
+            )
+        )
+
+    return lines

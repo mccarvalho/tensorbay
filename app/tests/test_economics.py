@@ -199,3 +199,112 @@ async def test_rep_in_use_delete_returns_409(client: AsyncClient) -> None:
     # A rep not on any deal deletes fine.
     resp2 = await client.delete(f"{V1}/economics/reps/{finder['id']}")
     assert resp2.status_code == 204
+
+
+async def _approved_deal(client, *, name, arr, margin, booked, ae=None, am=None, referred=False, finder=None):
+    body = {
+        "name": name,
+        "customer_id": "cust-x",
+        "arr": arr,
+        "margin_pct": margin,
+        "booked_date": booked,
+        "is_referred": referred,
+    }
+    if ae:
+        body["ae_id"] = ae
+    if am:
+        body["am_id"] = am
+    if finder:
+        body["finder_id"] = finder
+    d = (await client.post(f"{V1}/economics/deals", json=body)).json()
+    # Approve (healthy margins here never trip the guardrail).
+    await client.post(f"{V1}/economics/deals/{d['id']}/approve", json={})
+    return d
+
+
+async def test_quarterly_run_worked_example(client: AsyncClient) -> None:
+    ae, am, finder = await _plan_and_reps(client)
+    # $12M ARR @ 30% margin -> $3.6M GP. AE+AM above quota ($6M/$3M), referred.
+    await _approved_deal(
+        client, name="BigCo", arr="12000000.00", margin="0.30",
+        booked="2026-02-01", ae=ae["id"], am=am["id"], referred=True, finder=finder["id"],
+    )
+    run = (
+        await client.post(f"{V1}/economics/runs", json={"plan_year": 2026, "quarter": 1})
+    ).json()
+    by_component = {s["component"]: s for s in run["statements"]}
+    # AE: 10% of $3.6M = $360K, gate cleared ($12M >= $6M)
+    assert by_component["AE"]["amount"] == "360000.00"
+    assert by_component["AE"]["gate_cleared"] is True
+    # AM: 10% of $3.6M = $360K, gate cleared ($12M >= $3M)
+    assert by_component["AM"]["amount"] == "360000.00"
+    # Finder: 3% of $3.6M = $108K, no gate
+    assert by_component["FINDER"]["amount"] == "108000.00"
+    # Run total = 360K + 360K + 108K = 828K
+    assert run["total_commission"] == "828000.00"
+
+
+async def test_annual_gate_blocks_below_quota(client: AsyncClient) -> None:
+    ae, am, finder = await _plan_and_reps(client)
+    # AE books only $2M ARR (< $6M quota) -> $0 commission despite GP.
+    await _approved_deal(
+        client, name="Small", arr="2000000.00", margin="0.30",
+        booked="2026-02-01", ae=ae["id"],
+    )
+    run = (
+        await client.post(f"{V1}/economics/runs", json={"plan_year": 2026, "quarter": 1})
+    ).json()
+    ae_line = next(s for s in run["statements"] if s["component"] == "AE")
+    assert ae_line["gate_cleared"] is False
+    assert ae_line["amount"] == "0.00"
+    assert ae_line["ytd_earned"] == "0.00"
+
+
+async def test_quarterly_true_up_when_gate_clears_later(client: AsyncClient) -> None:
+    ae, am, finder = await _plan_and_reps(client)
+    # Q1: AE books $4M (< $6M) -> Q1 run pays $0.
+    await _approved_deal(
+        client, name="Q1 deal", arr="4000000.00", margin="0.30",
+        booked="2026-02-01", ae=ae["id"],
+    )
+    run_q1 = (
+        await client.post(f"{V1}/economics/runs", json={"plan_year": 2026, "quarter": 1})
+    ).json()
+    ae_q1 = next(s for s in run_q1["statements"] if s["component"] == "AE")
+    assert ae_q1["amount"] == "0.00"
+    assert ae_q1["gate_cleared"] is False
+
+    # Q2: AE books another $4M -> YTD $8M clears the $6M gate.
+    # YTD GP = $8M * 30% = $2.4M; YTD earned = 10% = $240K; prior paid $0 -> pay $240K.
+    await _approved_deal(
+        client, name="Q2 deal", arr="4000000.00", margin="0.30",
+        booked="2026-05-01", ae=ae["id"],
+    )
+    run_q2 = (
+        await client.post(f"{V1}/economics/runs", json={"plan_year": 2026, "quarter": 2})
+    ).json()
+    ae_q2 = next(s for s in run_q2["statements"] if s["component"] == "AE")
+    assert ae_q2["gate_cleared"] is True
+    assert ae_q2["ytd_earned"] == "240000.00"
+    assert ae_q2["prior_paid"] == "0.00"
+    assert ae_q2["amount"] == "240000.00"
+
+
+async def test_statement_mark_paid(client: AsyncClient) -> None:
+    ae, am, finder = await _plan_and_reps(client)
+    await _approved_deal(
+        client, name="PayMe", arr="7000000.00", margin="0.30",
+        booked="2026-02-01", ae=ae["id"],
+    )
+    run = (
+        await client.post(f"{V1}/economics/runs", json={"plan_year": 2026, "quarter": 1})
+    ).json()
+    ae_line = next(s for s in run["statements"] if s["component"] == "AE")
+    assert ae_line["amount"] == "210000.00"  # 10% of (7M*30%=2.1M)
+    paid = await client.post(
+        f"{V1}/economics/statements/{ae_line['id']}/mark-paid",
+        json={"payment_reference": "WIRE-123"},
+    )
+    assert paid.status_code == 200
+    assert paid.json()["payment_status"] == "PAID"
+    assert paid.json()["payment_reference"] == "WIRE-123"

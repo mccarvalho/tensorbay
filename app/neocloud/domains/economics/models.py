@@ -272,3 +272,45 @@ class CommissionStatement(Base, UUIDMixin, AuditMixin):
     )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class CostCategory(StrEnum):
+    """Cost categories for economics tracking (v1 = total cost)."""
+
+    GPU_ACQUISITION = "GPU_ACQUISITION"  # capex to acquire the GPUs
+    COLOCATION = "COLOCATION"  # data-center colocation / hosting
+    POWER = "POWER"
+    BANDWIDTH = "BANDWIDTH"
+    STAFF = "STAFF"
+    OTHER = "OTHER"
+
+
+class CostPeriod(StrEnum):
+    ONE_TIME = "ONE_TIME"  # e.g. a GPU purchase
+    MONTHLY = "MONTHLY"
+    ANNUAL = "ANNUAL"
+
+
+class CostItem(Base, UUIDMixin, AuditMixin):
+    """A tracked cost. v1 captures a total ``amount`` per item; items may be
+    allocated to a customer and/or a commission deal so real margin can be
+    derived (revenue vs. allocated cost)."""
+
+    __tablename__ = "cost_items"
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    category: Mapped[CostCategory] = mapped_column(String(24), nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    period: Mapped[CostPeriod] = mapped_column(
+        String(16), nullable=False, default=CostPeriod.ONE_TIME
+    )
+    incurred_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # Optional allocation targets (for real-margin computation).
+    customer_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    deal_id: Mapped[str | None] = mapped_column(
+        ForeignKey("commission_deals.id"), nullable=True, index=True
+    )
+    supplier_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -24,6 +24,7 @@ from neocloud.domains.economics.models import (
     CommissionPlan,
     CommissionRun,
     CommissionStatement,
+    CostItem,
     DealStatus,
     PaymentStatus,
     RunStatus,
@@ -44,6 +45,10 @@ from neocloud.domains.economics.schemas import (
     CommissionRunDetail,
     CommissionRunRead,
     CommissionStatementRead,
+    CostItemCreate,
+    CostItemRead,
+    CostItemUpdate,
+    DealEconomics,
     SalesRepCreate,
     SalesRepRead,
     SalesRepUpdate,
@@ -768,3 +773,120 @@ async def mark_statement_paid(
     )
     await session.refresh(stmt)
     return stmt
+
+
+# --------------------------------------------------------------------------- #
+# Cost items (Phase 4) - total-cost tracking + real margin
+# --------------------------------------------------------------------------- #
+ENTITY_COST = "cost_item"
+
+
+async def _get_cost_or_404(session: AsyncSession, cost_id: str) -> CostItem:
+    obj = await session.get(CostItem, cost_id)
+    if obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"CostItem {cost_id} not found"
+        )
+    return obj
+
+
+@router.get("/costs", response_model=list[CostItemRead])
+async def list_costs(
+    session: Session,
+    _user: ReadUser,
+    category: str | None = None,
+    customer_id: str | None = None,
+    deal_id: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    stmt = select(CostItem).order_by(CostItem.created_at.desc())
+    if category:
+        stmt = stmt.where(CostItem.category == category)
+    if customer_id:
+        stmt = stmt.where(CostItem.customer_id == customer_id)
+    if deal_id:
+        stmt = stmt.where(CostItem.deal_id == deal_id)
+    result = await session.execute(stmt.limit(limit).offset(offset))
+    return result.scalars().all()
+
+
+@router.get("/costs/{cost_id}", response_model=CostItemRead)
+async def get_cost(cost_id: str, session: Session, _user: ReadUser):
+    return await _get_cost_or_404(session, cost_id)
+
+
+@router.post("/costs", response_model=CostItemRead, status_code=status.HTTP_201_CREATED)
+async def create_cost(payload: CostItemCreate, session: Session, user: WriteUser):
+    obj = CostItem(
+        **payload.model_dump(), created_by=user.subject, updated_by=user.subject
+    )
+    session.add(obj)
+    await session.flush()
+    await record_audit(
+        session, action="create", entity_type=ENTITY_COST, entity_id=obj.id,
+        actor=user.subject, new_value=payload.model_dump(mode="json"),
+    )
+    await session.refresh(obj)
+    return obj
+
+
+@router.patch("/costs/{cost_id}", response_model=CostItemRead)
+async def update_cost(
+    cost_id: str, payload: CostItemUpdate, session: Session, user: WriteUser
+):
+    obj = await _get_cost_or_404(session, cost_id)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(obj, key, value)
+    obj.updated_by = user.subject
+    await session.flush()
+    await record_audit(
+        session, action="update", entity_type=ENTITY_COST, entity_id=obj.id,
+        actor=user.subject, new_value=payload.model_dump(mode="json", exclude_unset=True),
+    )
+    await session.refresh(obj)
+    return obj
+
+
+@router.delete("/costs/{cost_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_cost(cost_id: str, session: Session, user: WriteUser):
+    obj = await _get_cost_or_404(session, cost_id)
+    await session.delete(obj)
+    await record_audit(
+        session, action="delete", entity_type=ENTITY_COST, entity_id=cost_id,
+        actor=user.subject,
+    )
+
+
+@router.get("/deals/{deal_id}/economics", response_model=DealEconomics)
+async def deal_economics(deal_id: str, session: Session, user: ReadUser):
+    """Real margin for a deal: nominal (ARR x margin) vs. actual allocated cost.
+
+    Real gross profit = ARR - allocated cost; real margin = real GP / ARR.
+    """
+    deal = await _get_deal_or_404(session, deal_id)
+    if not _is_privileged(user):
+        rep_ids = await _rep_ids_for_user(session, user)
+        if deal.ae_id not in rep_ids and deal.am_id not in rep_ids and deal.finder_id not in rep_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your deal")
+    cost_rows = (
+        await session.execute(
+            select(CostItem.amount).where(CostItem.deal_id == deal_id)
+        )
+    ).scalars().all()
+    allocated = sum((Decimal(c) for c in cost_rows), Decimal("0")).quantize(Decimal("0.01"))
+    real_gp = (Decimal(deal.arr) - allocated).quantize(Decimal("0.01"))
+    real_margin = (
+        (real_gp / Decimal(deal.arr)).quantize(Decimal("0.0001"))
+        if deal.arr and Decimal(deal.arr) != 0
+        else None
+    )
+    return DealEconomics(
+        deal_id=deal.id,
+        arr=deal.arr,
+        nominal_margin_pct=deal.margin_pct,
+        nominal_gross_profit=deal.gross_profit,
+        allocated_cost=allocated,
+        real_gross_profit=real_gp,
+        real_margin_pct=real_margin,
+    )

@@ -242,3 +242,59 @@ class CommissionRunDetail(CommissionRunRead):
 
 class StatementMarkPaid(BaseModel):
     payment_reference: str | None = Field(default=None, max_length=255)
+
+
+# --------------------------------------------------------------------------- #
+# Cost items (Phase 4)
+# --------------------------------------------------------------------------- #
+from neocloud.domains.economics.models import CostCategory, CostPeriod  # noqa: E402
+
+
+class CostItemBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    category: CostCategory
+    amount: Decimal = Field(..., ge=0)
+    currency: str = Field(default="USD", max_length=3)
+    period: CostPeriod = CostPeriod.ONE_TIME
+    incurred_on: date | None = None
+    customer_id: str | None = Field(default=None, max_length=36)
+    deal_id: str | None = Field(default=None, max_length=36)
+    supplier_id: str | None = Field(default=None, max_length=36)
+    notes: str | None = None
+
+
+class CostItemCreate(CostItemBase):
+    pass
+
+
+class CostItemUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=255)
+    category: CostCategory | None = None
+    amount: Decimal | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, max_length=3)
+    period: CostPeriod | None = None
+    incurred_on: date | None = None
+    customer_id: str | None = Field(default=None, max_length=36)
+    deal_id: str | None = Field(default=None, max_length=36)
+    supplier_id: str | None = Field(default=None, max_length=36)
+    notes: str | None = None
+
+
+class CostItemRead(CostItemBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class DealEconomics(BaseModel):
+    """Real-margin view for a deal: ARR, nominal margin, and actual cost."""
+
+    deal_id: str
+    arr: Decimal
+    nominal_margin_pct: Decimal
+    nominal_gross_profit: Decimal
+    allocated_cost: Decimal
+    real_gross_profit: Decimal
+    real_margin_pct: Decimal | None

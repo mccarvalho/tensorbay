@@ -308,3 +308,57 @@ async def test_statement_mark_paid(client: AsyncClient) -> None:
     assert paid.status_code == 200
     assert paid.json()["payment_status"] == "PAID"
     assert paid.json()["payment_reference"] == "WIRE-123"
+
+
+async def test_cost_items_and_real_margin(client: AsyncClient) -> None:
+    ae, am, finder = await _plan_and_reps(client)
+    # A $10M ARR deal nominally at 30%.
+    deal = (
+        await client.post(
+            f"{V1}/economics/deals",
+            json={
+                "name": "RealMargin deal",
+                "customer_id": "cust-rm",
+                "arr": "10000000.00",
+                "margin_pct": "0.30",
+                "ae_id": ae["id"],
+                "booked_date": "2026-03-01",
+            },
+        )
+    ).json()
+    # Allocate $8M total cost (GPU acquisition + colocation) to the deal.
+    c1 = await client.post(
+        f"{V1}/economics/costs",
+        json={
+            "name": "H100 cluster purchase",
+            "category": "GPU_ACQUISITION",
+            "amount": "6000000.00",
+            "period": "ONE_TIME",
+            "deal_id": deal["id"],
+            "customer_id": "cust-rm",
+        },
+    )
+    assert c1.status_code == 201, c1.text
+    await client.post(
+        f"{V1}/economics/costs",
+        json={
+            "name": "Colo - annual",
+            "category": "COLOCATION",
+            "amount": "2000000.00",
+            "period": "ANNUAL",
+            "deal_id": deal["id"],
+        },
+    )
+    # Real margin: ARR $10M - cost $8M = $2M real GP -> 20% real margin.
+    econ = await client.get(f"{V1}/economics/deals/{deal['id']}/economics")
+    assert econ.status_code == 200, econ.text
+    e = econ.json()
+    assert e["allocated_cost"] == "8000000.00"
+    assert e["nominal_gross_profit"] == "3000000.00"
+    assert e["real_gross_profit"] == "2000000.00"
+    assert e["real_margin_pct"] == "0.2000"
+
+    # Filter costs by deal
+    listed = await client.get(f"{V1}/economics/costs", params={"deal_id": deal["id"]})
+    assert listed.status_code == 200
+    assert len(listed.json()) == 2

@@ -2,11 +2,13 @@ import { type ReactElement, useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { decodeClaims, getSession, logout, type UserClaims } from '../auth';
 import { config } from '../config';
+import { hasPermission, type Permission } from '../permissions';
 
 interface NavItem {
   to: string;
   label: string;
   role?: string; // if set, only shown to users in this Cognito group
+  perm?: Permission; // if set, only shown to users with this permission
 }
 
 const NAV: NavItem[] = [
@@ -19,6 +21,7 @@ const NAV: NavItem[] = [
   { to: '/suppliers', label: 'Suppliers' },
   { to: '/capacity', label: 'Capacity' },
   { to: '/reservations', label: 'Reservations' },
+  { to: '/economics', label: 'Economics', perm: 'economics.read' },
   { to: '/documents', label: 'AI Documents' },
   { to: '/admin', label: 'Admin', role: 'SUPER_ADMIN' },
 ];
@@ -68,7 +71,9 @@ export function AppLayout(): ReactElement {
 
       <nav className="flex flex-1 flex-col gap-1">
         {NAV.filter(
-          (item) => !item.role || (claims?.groups ?? []).includes(item.role),
+          (item) =>
+            (!item.role || (claims?.groups ?? []).includes(item.role)) &&
+            (!item.perm || hasPermission(item.perm)),
         ).map((item) => (
           <NavLink
             key={item.to}

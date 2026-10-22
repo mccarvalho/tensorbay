@@ -21,7 +21,10 @@ export type Permission =
   | 'allocation.release'
   | 'provisioning.execute'
   | 'document.generate'
-  | 'user.admin';
+  | 'user.admin'
+  | 'economics.read'
+  | 'economics.write'
+  | 'commission.approve';
 
 const ALL: Permission[] = [
   'customer.read', 'customer.write', 'contract.read', 'contract.write',
@@ -29,14 +32,15 @@ const ALL: Permission[] = [
   'pricing.write', 'billing.read', 'billing.write', 'allocation.create',
   'allocation.release', 'provisioning.execute', 'document.generate', 'user.admin',
   'supplier.read', 'supplier.write',
+  'economics.read', 'economics.write', 'commission.approve',
 ];
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   SUPER_ADMIN: ALL,
-  EXECUTIVE: ['customer.read', 'contract.read', 'inventory.read', 'capacity.read', 'pricing.read', 'billing.read', 'supplier.read'],
-  SALES_MANAGER: ['customer.read', 'customer.write', 'contract.read', 'contract.write', 'capacity.read', 'pricing.read', 'pricing.write', 'document.generate'],
-  SALES: ['customer.read', 'customer.write', 'contract.read', 'capacity.read', 'pricing.read', 'document.generate'],
-  FINANCE: ['customer.read', 'contract.read', 'billing.read', 'billing.write', 'pricing.read'],
+  EXECUTIVE: ['customer.read', 'contract.read', 'inventory.read', 'capacity.read', 'pricing.read', 'billing.read', 'supplier.read', 'economics.read', 'economics.write'],
+  SALES_MANAGER: ['customer.read', 'customer.write', 'contract.read', 'contract.write', 'capacity.read', 'pricing.read', 'pricing.write', 'document.generate', 'economics.read', 'economics.write'],
+  SALES: ['customer.read', 'customer.write', 'contract.read', 'capacity.read', 'pricing.read', 'document.generate', 'economics.read'],
+  FINANCE: ['customer.read', 'contract.read', 'billing.read', 'billing.write', 'pricing.read', 'economics.read', 'economics.write'],
   OPERATIONS_MANAGER: ['inventory.read', 'inventory.write', 'capacity.read', 'allocation.create', 'allocation.release', 'provisioning.execute', 'supplier.read', 'supplier.write'],
   OPERATIONS: ['inventory.read', 'inventory.write', 'capacity.read', 'supplier.read', 'supplier.write'],
   CLOUD_ADMIN: ['inventory.read', 'capacity.read', 'allocation.create', 'allocation.release', 'provisioning.execute'],

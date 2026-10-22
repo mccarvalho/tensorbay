@@ -16,6 +16,7 @@ import Inventory from './pages/Inventory';
 import Suppliers from './pages/Suppliers';
 import Capacity from './pages/Capacity';
 import Reservations from './pages/Reservations';
+import Economics from './pages/Economics';
 import Documents from './pages/Documents';
 import Admin from './pages/Admin';
 
@@ -47,6 +48,7 @@ export default function App(): ReactElement {
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="capacity" element={<Capacity />} />
         <Route path="reservations" element={<Reservations />} />
+        <Route path="economics" element={<Economics />} />
         <Route path="documents" element={<Documents />} />
         <Route path="admin" element={<Admin />} />
       </Route>

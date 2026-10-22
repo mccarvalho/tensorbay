@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # Public base URL of the frontend, used for the "Sign in with Google" link
     # in invite emails. Falls back to a dev default.
     app_base_url: str = "https://d22xy9yyfwju3n.cloudfront.net"
+    # SES configuration set for bounce/complaint tracking. When set, invite
+    # emails are sent through it so events are published to SNS.
+    ses_configuration_set: str | None = None
 
     @property
     def cognito_issuer(self) -> str | None:

@@ -197,6 +197,12 @@ variable "app_base_url" {
   default     = "https://d22xy9yyfwju3n.cloudfront.net"
 }
 
+variable "ses_notification_email" {
+  description = "Email address notified on SES bounce/complaint events. Empty disables the subscription."
+  type        = string
+  default     = ""
+}
+
 ############################
 # AI document generation (Amazon Bedrock)
 ############################

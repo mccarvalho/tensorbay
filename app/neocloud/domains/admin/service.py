@@ -157,17 +157,20 @@ class AdminService:
             f"{login_url}\n\nIf you didn't expect this, you can ignore this email."
         )
         try:
-            self._ses.send_email(
-                Source=self._settings.ses_from_email,
-                Destination={"ToAddresses": [email]},
-                Message={
+            send_kwargs: dict = {
+                "Source": self._settings.ses_from_email,
+                "Destination": {"ToAddresses": [email]},
+                "Message": {
                     "Subject": {"Data": subject, "Charset": "UTF-8"},
                     "Body": {
                         "Html": {"Data": html, "Charset": "UTF-8"},
                         "Text": {"Data": text, "Charset": "UTF-8"},
                     },
                 },
-            )
+            }
+            if self._settings.ses_configuration_set:
+                send_kwargs["ConfigurationSetName"] = self._settings.ses_configuration_set
+            self._ses.send_email(**send_kwargs)
             logger.info("invite_email_sent", email=email)
         except Exception as exc:  # noqa: BLE001 — don't fail the invite on email error
             logger.error("invite_email_failed", email=email, error=str(exc))

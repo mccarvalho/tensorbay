@@ -92,6 +92,7 @@ module "compute" {
     COGNITO_CLIENT_ID     = module.identity.user_pool_client_id
     SES_FROM_EMAIL        = var.ses_from_email
     APP_BASE_URL          = var.app_base_url
+    SES_CONFIGURATION_SET = module.email.configuration_set_name
   }
 
   tags = local.common_tags
@@ -172,6 +173,15 @@ module "ai" {
   task_role_name       = module.compute.task_role_name
   documents_bucket_arn = aws_s3_bucket.data.arn
   tags                 = local.common_tags
+}
+
+module "email" {
+  source = "./modules/email"
+
+  name_prefix        = local.name_prefix
+  account_id         = data.aws_caller_identity.current.account_id
+  notification_email = var.ses_notification_email
+  tags               = local.common_tags
 }
 
 ########################################

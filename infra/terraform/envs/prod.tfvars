@@ -66,3 +66,4 @@ cognito_logout_urls = [
 # Google Workspace SSO — SAME OAuth client as dev (shared). Client ID is not
 # secret; the client SECRET is passed separately at apply time.
 google_oidc_client_id = "185060429707-e0aidmvu1hnsil8u5elb39j9e0053o9r.apps.googleusercontent.com"
+ses_notification_email = "mcarvalho@tensorbay.io"

@@ -178,3 +178,24 @@ async def test_deal_approve_and_reject_flow(client: AsyncClient) -> None:
     assert rej.status_code == 200
     assert rej.json()["status"] == "REJECTED"
     assert rej.json()["rejection_reason"] == "pricing not final"
+
+
+async def test_rep_in_use_delete_returns_409(client: AsyncClient) -> None:
+    ae, am, finder = await _plan_and_reps(client)
+    await client.post(
+        f"{V1}/economics/deals",
+        json={
+            "name": "Deal using AE",
+            "customer_id": "cust-9",
+            "arr": "1000000.00",
+            "margin_pct": "0.35",
+            "ae_id": ae["id"],
+            "booked_date": "2026-02-01",
+        },
+    )
+    # The AE is referenced by a deal -> delete must be a clean 409, not 500.
+    resp = await client.delete(f"{V1}/economics/reps/{ae['id']}")
+    assert resp.status_code == 409, resp.text
+    # A rep not on any deal deletes fine.
+    resp2 = await client.delete(f"{V1}/economics/reps/{finder['id']}")
+    assert resp2.status_code == 204

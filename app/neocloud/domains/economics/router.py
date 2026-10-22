@@ -148,6 +148,21 @@ async def update_rep(
 @router.delete("/reps/{rep_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_rep(rep_id: str, session: Session, user: WriteUser):
     obj = await _get_rep_or_404(session, rep_id)
+    # Guard: don't orphan deals that credit this rep.
+    in_use = await session.execute(
+        select(CommissionDeal.id)
+        .where(
+            (CommissionDeal.ae_id == rep_id)
+            | (CommissionDeal.am_id == rep_id)
+            | (CommissionDeal.finder_id == rep_id)
+        )
+        .limit(1)
+    )
+    if in_use.first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rep is referenced by one or more commission deals; set INACTIVE instead of deleting",
+        )
     await session.delete(obj)
     await record_audit(
         session,

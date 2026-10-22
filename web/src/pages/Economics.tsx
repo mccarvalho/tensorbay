@@ -123,8 +123,8 @@ function DashboardTab() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Approved ARR" value={usd(totalArr)} accent="cyan" sub={`${approved.length} deals`} />
-        <KpiCard label="Gross profit (nominal)" value={usd(totalGp)} accent="grape" />
-        <KpiCard label="Commission to date" value={usd(totalCommission)} accent="white" sub={`${(runs.data ?? []).length} runs`} />
+        <KpiCard label="Gross profit (commission base)" value={usd(totalGp)} accent="grape" />
+        <KpiCard label="Commission to date" value={usd(totalCommission)} accent="white" sub={`${(runs.data ?? []).length} runs · of gross profit`} />
         <KpiCard label="Pending approval" value={pending.length} accent="flamingo"
           sub={warnings.length ? `${warnings.length} below-margin ⚠` : 'none below margin'} />
       </div>
@@ -470,7 +470,9 @@ function RunsTab() {
                   { key: 'component', header: 'Pool', render: (s: Statement) => <Badge tone={REP_TONE[s.component]}>{s.component}</Badge> },
                   { key: 'ytd_arr', header: 'YTD ARR', className: 'text-right', render: (s: Statement) => usd(s.ytd_arr) },
                   { key: 'gate', header: 'Gate', render: (s: Statement) => <Badge tone={s.gate_cleared ? 'success' : 'neutral'}>{s.gate_cleared ? 'cleared' : `< ${usd(s.quota_arr)}`}</Badge> },
-                  { key: 'ytd_earned', header: 'YTD earned', className: 'text-right', render: (s: Statement) => usd(s.ytd_earned) },
+                  { key: 'ytd_gp', header: 'YTD gross profit', className: 'text-right', render: (s: Statement) => usd(s.ytd_gross_profit) },
+                  { key: 'rate', header: 'Rate', className: 'text-right', render: (s: Statement) => pct(s.rate) },
+                  { key: 'ytd_earned', header: 'YTD earned (rate × GP)', className: 'text-right', render: (s: Statement) => usd(s.ytd_earned) },
                   { key: 'amount', header: 'This quarter', className: 'text-right', render: (s: Statement) => <span className="font-medium text-white">{usd(s.amount)}</span> },
                   { key: 'pay', header: 'Payment', render: (s: Statement) => s.payment_status === 'PAID' ? <Badge tone="success">PAID</Badge> : (canWrite ? <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => markPaid.mutate(s.id)}>Mark paid</button> : <Badge tone="neutral">UNPAID</Badge>) },
                 ]}

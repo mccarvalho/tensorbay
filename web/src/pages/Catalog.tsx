@@ -9,6 +9,8 @@ import {
   COMMERCIAL_MODELS,
   SKU_CATEGORIES,
   PRICE_BOOK_SCOPES,
+  MARGIN_TARGET_PCT,
+  MARGIN_FLOOR_PCT,
 } from '../constants';
 import {
   SectionHeader,
@@ -392,6 +394,115 @@ function PriceBooksTab({ canWrite }: { canWrite: boolean }) {
 // --------------------------------------------------------------------------- //
 // Prices
 // --------------------------------------------------------------------------- //
+
+// Pricing math: margin is a fraction of the SELLING price, so
+//   price = cost / (1 - margin)   and   margin = (price - cost) / price.
+function priceForMargin(cost: number, marginPct: number): number {
+  if (cost <= 0 || marginPct >= 1) return 0;
+  return cost / (1 - marginPct);
+}
+function marginForPrice(cost: number, price: number): number {
+  if (price <= 0) return 0;
+  return (price - cost) / price;
+}
+
+// Margin → tone/label against the 40% target / 30% floor policy.
+function marginVerdict(margin: number): { tone: BadgeTone; label: string } {
+  if (margin >= MARGIN_TARGET_PCT) return { tone: 'success', label: 'At / above target' };
+  if (margin >= MARGIN_FLOOR_PCT) return { tone: 'warning', label: 'Below target' };
+  return { tone: 'flamingo', label: 'Below minimum' };
+}
+
+const pct = (v: number): string => `${(v * 100).toFixed(1)}%`;
+
+// A compact cost-based pricing helper embedded in the Price form. Enter a cost
+// and a target margin; it fills the unit price with cost / (1 - margin) and
+// shows a live verdict against the 40% target and 30% floor.
+function PricingCalculator({
+  unitPrice,
+  onApplyPrice,
+}: {
+  unitPrice: number;
+  onApplyPrice: (price: number) => void;
+}) {
+  const [cost, setCost] = useState<string>('');
+  const [targetMargin, setTargetMargin] = useState<number>(MARGIN_TARGET_PCT);
+
+  const costNum = Number(cost) || 0;
+  const suggested = priceForMargin(costNum, targetMargin);
+  // Live margin of whatever price is currently in the form, given the cost.
+  const currentMargin = costNum > 0 && unitPrice > 0 ? marginForPrice(costNum, unitPrice) : null;
+  const verdict = currentMargin !== null ? marginVerdict(currentMargin) : null;
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-sm font-semibold text-white">Pricing helper</span>
+        <span className="text-xs text-grape-soft">
+          Target {pct(MARGIN_TARGET_PCT)} · Floor {pct(MARGIN_FLOOR_PCT)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="pc_cost">Your cost per unit (USD)</label>
+          <input
+            id="pc_cost"
+            type="number"
+            min={0}
+            step="0.0001"
+            className="input"
+            placeholder="e.g. 1800"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-grape-soft">
+            Fully-loaded: amortized GPU capex + colo, power, bandwidth, staff.
+          </p>
+        </div>
+        <div>
+          <label className="label" htmlFor="pc_margin">Target margin</label>
+          <select
+            id="pc_margin"
+            className="input"
+            value={targetMargin}
+            onChange={(e) => setTargetMargin(Number(e.target.value))}
+          >
+            <option value={MARGIN_FLOOR_PCT}>{pct(MARGIN_FLOOR_PCT)} (minimum)</option>
+            <option value={MARGIN_TARGET_PCT}>{pct(MARGIN_TARGET_PCT)} (target)</option>
+            <option value={0.5}>50.0%</option>
+            <option value={0.6}>60.0%</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-grape-soft">
+          Suggested price:{' '}
+          <span className="font-semibold text-cyan">
+            {costNum > 0 ? money(suggested) : '—'}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn-ghost px-3 py-1 text-xs"
+          disabled={costNum <= 0}
+          onClick={() => onApplyPrice(Number(suggested.toFixed(4)))}
+        >
+          Apply to unit price
+        </button>
+      </div>
+
+      {verdict && currentMargin !== null && (
+        <div className="mt-3 flex items-center gap-2 text-xs">
+          <span className="text-grape-soft">Current price margin:</span>
+          <Badge tone={verdict.tone}>{pct(currentMargin)} · {verdict.label}</Badge>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PricesTab({ canWrite }: { canWrite: boolean }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -529,6 +640,12 @@ function PricesTab({ canWrite }: { canWrite: boolean }) {
                 onChange={(e) => setForm({ ...form, unit: e.target.value })} />
             </div>
           </div>
+          {canWrite && (
+            <PricingCalculator
+              unitPrice={Number(form.unit_price)}
+              onApplyPrice={(price) => setForm({ ...form, unit_price: price })}
+            />
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="p_price">Unit Price (USD)</label>

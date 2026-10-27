@@ -69,3 +69,10 @@ export const ACTUAL_STATUSES = ['DELIVERED', 'OPERATIONAL'] as const;
 export type SupplierTier = (typeof SUPPLIER_TIERS)[number];
 export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number];
 export type ProcurementStatus = (typeof PROCUREMENT_STATUSES)[number];
+
+// Gross-profit policy (fractions of selling price).
+// TARGET is the margin we aim for on every deal; FLOOR is the hard minimum
+// below which a deal must not close. Mirrors the commission plan's
+// default_margin_pct governance (floor = 0.30).
+export const MARGIN_TARGET_PCT = 0.40;
+export const MARGIN_FLOOR_PCT = 0.30;

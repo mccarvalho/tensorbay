@@ -69,4 +69,4 @@ google_oidc_client_id  = "185060429707-e0aidmvu1hnsil8u5elb39j9e0053o9r.apps.goo
 ses_notification_email = "mcarvalho@tensorbay.io"
 
 economics_alert_emails = "mcarvalho@tensorbay.io"
-lead_alert_emails      = "mcarvalho@tensorbay.io"
+lead_alert_emails      = "mcarvalho@tensorbay.io,lizi@tensorbay.io"

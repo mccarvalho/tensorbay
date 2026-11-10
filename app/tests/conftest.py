@@ -18,6 +18,7 @@ import os
 # --- Configure environment BEFORE importing anything from the app ----------
 os.environ["AUTH_ENABLED"] = "false"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["LEAD_INGEST_TOKEN"] = "test-ingest-token"
 os.environ.pop("DOCUMENTS_BUCKET", None)
 
 from collections.abc import AsyncGenerator  # noqa: E402
@@ -43,6 +44,7 @@ from neocloud.domains.customers import models as _customers_models  # noqa: E402
 from neocloud.domains.documents import models as _documents_models  # noqa: E402,F401
 from neocloud.domains.economics import models as _economics_models  # noqa: E402,F401
 from neocloud.domains.inventory import models as _inventory_models  # noqa: E402,F401
+from neocloud.domains.leads import models as _leads_models  # noqa: E402,F401
 from neocloud.domains.reservations import models as _reservations_models  # noqa: E402,F401
 from neocloud.domains.sales import models as _sales_models  # noqa: E402,F401
 from neocloud.domains.suppliers import models as _suppliers_models  # noqa: E402,F401

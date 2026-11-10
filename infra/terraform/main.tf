@@ -68,10 +68,11 @@ module "compute" {
   kms_logs_key_arn   = module.security.kms_logs_key_arn
   waf_web_acl_arn    = module.security.waf_web_acl_arn
 
-  # Let the task read DB and SSO secrets.
+  # Let the task read DB, SSO and lead-ingest secrets.
   secret_arns = [
     module.security.aurora_secret_arn,
-    module.security.google_oidc_secret_arn
+    module.security.google_oidc_secret_arn,
+    module.security.lead_ingest_secret_arn
   ]
   secrets_kms_key_arn = module.security.kms_secrets_key_arn
 
@@ -94,6 +95,8 @@ module "compute" {
     APP_BASE_URL           = var.app_base_url
     SES_CONFIGURATION_SET  = module.email.configuration_set_name
     ECONOMICS_ALERT_EMAILS = var.economics_alert_emails
+    LEAD_INGEST_SECRET_ARN = module.security.lead_ingest_secret_arn
+    LEAD_ALERT_EMAILS      = var.lead_alert_emails
   }
 
   tags = local.common_tags

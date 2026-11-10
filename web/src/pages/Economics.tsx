@@ -31,7 +31,7 @@ type Component = 'AE' | 'AM' | 'FINDER';
 
 interface Rep {
   id: string; name: string; email: string | null; type: RepType; status: RepStatus;
-  base_salary: string | null; cognito_sub: string | null; payment_details: string | null; notes: string | null;
+  base_salary: string | null; cognito_sub: string | null; payment_details: string | null; regions: string | null; notes: string | null;
 }
 interface Deal {
   id: string; name: string; customer_id: string; opportunity_id: string | null; plan_id: string | null;
@@ -159,7 +159,7 @@ function DashboardTab() {
 // --------------------------------------------------------------------------- //
 // Reps tab
 // --------------------------------------------------------------------------- //
-const emptyRep = () => ({ name: '', email: '', type: 'AE' as RepType, status: 'ACTIVE' as RepStatus, base_salary: '', cognito_sub: '', payment_details: '', notes: '' });
+const emptyRep = () => ({ name: '', email: '', type: 'AE' as RepType, status: 'ACTIVE' as RepStatus, base_salary: '', cognito_sub: '', payment_details: '', regions: '', notes: '' });
 
 function RepsTab() {
   const qc = useQueryClient();
@@ -179,7 +179,8 @@ function RepsTab() {
       const payload = {
         name: form.name, email: form.email || null, type: form.type, status: form.status,
         base_salary: form.base_salary ? form.base_salary : null,
-        cognito_sub: form.cognito_sub || null, payment_details: form.payment_details || null, notes: form.notes || null,
+        cognito_sub: form.cognito_sub || null, payment_details: form.payment_details || null,
+        regions: form.regions || null, notes: form.notes || null,
       };
       return editId ? api.patch<Rep>(`/v1/economics/reps/${editId}`, payload) : api.post<Rep>('/v1/economics/reps', payload);
     },
@@ -194,13 +195,14 @@ function RepsTab() {
 
   function openEdit(r: Rep) {
     setEditId(r.id);
-    setForm({ name: r.name, email: r.email ?? '', type: r.type, status: r.status, base_salary: r.base_salary ?? '', cognito_sub: r.cognito_sub ?? '', payment_details: r.payment_details ?? '', notes: r.notes ?? '' });
+    setForm({ name: r.name, email: r.email ?? '', type: r.type, status: r.status, base_salary: r.base_salary ?? '', cognito_sub: r.cognito_sub ?? '', payment_details: r.payment_details ?? '', regions: r.regions ?? '', notes: r.notes ?? '' });
     setOpen(true);
   }
 
   const columns: Array<Column<Rep>> = [
     { key: 'name', header: 'Name', render: (r) => <div className="flex flex-col"><span className="font-medium text-white">{r.name}</span>{r.email && <span className="text-xs text-grape-soft">{r.email}</span>}</div> },
     { key: 'type', header: 'Role', render: (r) => <Badge tone={REP_TONE[r.type]}>{r.type}</Badge> },
+    { key: 'regions', header: 'Lead regions', render: (r) => r.type === 'AM' ? (r.regions || <span className="text-grape-soft">all (catch-all)</span>) : <span className="text-grape-soft">—</span> },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'ACTIVE' ? 'success' : 'neutral'}>{r.status}</Badge> },
     { key: 'base_salary', header: 'Base salary', className: 'text-right', render: (r) => r.base_salary ? usd(r.base_salary) : '—' },
     { key: 'portal', header: 'Portal', render: (r) => r.cognito_sub ? <Badge tone="cyan">linked</Badge> : <span className="text-grape-soft">—</span> },
@@ -236,6 +238,11 @@ function RepsTab() {
               </select></div>
           </div>
           <div><label className="label">Email</label><input className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+          {form.type === 'AM' && (
+            <div><label className="label">Lead regions (comma-separated)</label>
+              <input className="input" placeholder="North America, LATAM — blank = catch-all" value={form.regions} onChange={(e) => setForm({ ...form, regions: e.target.value })} />
+              <p className="mt-1 text-xs text-grape-soft">Website leads from these regions are assigned to this Account Manager.</p></div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div><label className="label">Base salary (USD)</label><input className="input" type="number" min="0" value={form.base_salary} onChange={(e) => setForm({ ...form, base_salary: e.target.value })} /></div>
             <div><label className="label">Cognito sub (portal link)</label><input className="input" placeholder="optional" value={form.cognito_sub} onChange={(e) => setForm({ ...form, cognito_sub: e.target.value })} /></div>

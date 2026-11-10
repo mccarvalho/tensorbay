@@ -24,7 +24,9 @@ export type Permission =
   | 'user.admin'
   | 'economics.read'
   | 'economics.write'
-  | 'commission.approve';
+  | 'commission.approve'
+  | 'lead.read'
+  | 'lead.write';
 
 const ALL: Permission[] = [
   'customer.read', 'customer.write', 'contract.read', 'contract.write',
@@ -33,13 +35,14 @@ const ALL: Permission[] = [
   'allocation.release', 'provisioning.execute', 'document.generate', 'user.admin',
   'supplier.read', 'supplier.write',
   'economics.read', 'economics.write', 'commission.approve',
+  'lead.read', 'lead.write',
 ];
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   SUPER_ADMIN: ALL,
-  EXECUTIVE: ['customer.read', 'contract.read', 'inventory.read', 'capacity.read', 'pricing.read', 'billing.read', 'supplier.read', 'economics.read', 'economics.write'],
-  SALES_MANAGER: ['customer.read', 'customer.write', 'contract.read', 'contract.write', 'capacity.read', 'pricing.read', 'pricing.write', 'document.generate', 'economics.read', 'economics.write'],
-  SALES: ['customer.read', 'customer.write', 'contract.read', 'capacity.read', 'pricing.read', 'document.generate', 'economics.read'],
+  EXECUTIVE: ['customer.read', 'contract.read', 'inventory.read', 'capacity.read', 'pricing.read', 'billing.read', 'supplier.read', 'economics.read', 'economics.write', 'lead.read'],
+  SALES_MANAGER: ['customer.read', 'customer.write', 'contract.read', 'contract.write', 'capacity.read', 'pricing.read', 'pricing.write', 'document.generate', 'economics.read', 'economics.write', 'lead.read', 'lead.write'],
+  SALES: ['customer.read', 'customer.write', 'contract.read', 'capacity.read', 'pricing.read', 'document.generate', 'economics.read', 'lead.read', 'lead.write'],
   FINANCE: ['customer.read', 'contract.read', 'billing.read', 'billing.write', 'pricing.read', 'economics.read', 'economics.write'],
   OPERATIONS_MANAGER: ['inventory.read', 'inventory.write', 'capacity.read', 'allocation.create', 'allocation.release', 'provisioning.execute', 'supplier.read', 'supplier.write'],
   OPERATIONS: ['inventory.read', 'inventory.write', 'capacity.read', 'supplier.read', 'supplier.write'],

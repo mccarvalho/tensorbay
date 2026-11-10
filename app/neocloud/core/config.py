@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     # Comma-separated recipients (e.g. Super Admins / finance) alerted on
     # sub-default-margin commission deals, in addition to the deal's AM.
     economics_alert_emails: str = ""
+    # --- Website lead ingestion (POST /v1/leads/ingest) ---
+    # Shared-secret bearer token the website form backend presents. Either set
+    # LEAD_INGEST_TOKEN directly (tests/local) or point LEAD_INGEST_SECRET_ARN at
+    # a Secrets Manager secret holding {"token": "..."} (deployed envs).
+    lead_ingest_token: str | None = None
+    lead_ingest_secret_arn: str | None = None
+    # Comma-separated extra recipients notified of every new lead, in addition to
+    # the Account Manager the lead is assigned to.
+    lead_alert_emails: str = ""
 
     @property
     def cognito_issuer(self) -> str | None:

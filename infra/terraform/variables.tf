@@ -264,3 +264,9 @@ variable "github_sub_patterns" {
   type        = list(string)
   default     = []
 }
+
+variable "lead_alert_emails" {
+  description = "Comma-separated recipients notified of every new website lead, in addition to the assigned Account Manager."
+  type        = string
+  default     = ""
+}

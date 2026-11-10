@@ -63,6 +63,10 @@ class SalesRep(Base, UUIDMixin, AuditMixin):
     cognito_sub: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # Free-form payment details (bank / PIX / entity) - kept simple for v1.
     payment_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Comma-separated sales regions this rep covers (e.g. "North America, LATAM").
+    # Used to route inbound website leads to the right Account Manager. A rep with
+    # no regions acts as a catch-all.
+    regions: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

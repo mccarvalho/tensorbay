@@ -43,3 +43,27 @@ resource "aws_secretsmanager_secret_version" "google_oidc" {
     client_secret = var.google_oidc_client_secret
   })
 }
+
+# Shared bearer token the website form backend presents to POST /v1/leads/ingest.
+# Generated once here; ignore_changes lets it be rotated later with
+# `aws secretsmanager put-secret-value` without Terraform reverting it.
+resource "random_password" "lead_ingest" {
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "lead_ingest" {
+  name        = "${var.name_prefix}/leads/ingest-token"
+  description = "Bearer token for the website lead-ingest webhook (${var.name_prefix})"
+  kms_key_id  = aws_kms_key.secrets.arn
+  tags        = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "lead_ingest" {
+  secret_id     = aws_secretsmanager_secret.lead_ingest.id
+  secret_string = jsonencode({ token = random_password.lead_ingest.result })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}

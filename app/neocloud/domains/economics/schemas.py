@@ -19,6 +19,7 @@ class SalesRepBase(BaseModel):
     base_salary: Decimal | None = Field(default=None, ge=0)
     cognito_sub: str | None = Field(default=None, max_length=64)
     payment_details: str | None = None
+    regions: str | None = Field(default=None, max_length=255)
     notes: str | None = None
 
 
@@ -34,6 +35,7 @@ class SalesRepUpdate(BaseModel):
     base_salary: Decimal | None = Field(default=None, ge=0)
     cognito_sub: str | None = Field(default=None, max_length=64)
     payment_details: str | None = None
+    regions: str | None = Field(default=None, max_length=255)
     notes: str | None = None
 
 

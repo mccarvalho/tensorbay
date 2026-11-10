@@ -38,3 +38,8 @@ output "waf_web_acl_arn" {
   description = "ARN of the regional WAF Web ACL for the ALB."
   value       = aws_wafv2_web_acl.alb.arn
 }
+
+output "lead_ingest_secret_arn" {
+  description = "Secrets Manager ARN holding the website lead-ingest bearer token."
+  value       = aws_secretsmanager_secret.lead_ingest.arn
+}

@@ -38,6 +38,8 @@ class Permission(StrEnum):
     ECONOMICS_READ = "economics.read"
     ECONOMICS_WRITE = "economics.write"
     COMMISSION_APPROVE = "commission.approve"
+    LEAD_READ = "lead.read"
+    LEAD_WRITE = "lead.write"
 
 
 _ALL = set(Permission)
@@ -54,6 +56,7 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.SUPPLIER_READ,
         Permission.ECONOMICS_READ,
         Permission.ECONOMICS_WRITE,
+        Permission.LEAD_READ,
     },
     Role.SALES_MANAGER: {
         Permission.CUSTOMER_READ,
@@ -66,6 +69,8 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.DOCUMENT_GENERATE,
         Permission.ECONOMICS_READ,
         Permission.ECONOMICS_WRITE,
+        Permission.LEAD_READ,
+        Permission.LEAD_WRITE,
     },
     Role.SALES: {
         Permission.CUSTOMER_READ,
@@ -75,6 +80,8 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.PRICING_READ,
         Permission.DOCUMENT_GENERATE,
         Permission.ECONOMICS_READ,
+        Permission.LEAD_READ,
+        Permission.LEAD_WRITE,
     },
     Role.FINANCE: {
         Permission.CUSTOMER_READ,

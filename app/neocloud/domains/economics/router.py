@@ -121,9 +121,10 @@ async def get_rep(rep_id: str, session: Session, _user: ReadUser):
 
 @router.post("/reps", response_model=SalesRepRead, status_code=status.HTTP_201_CREATED)
 async def create_rep(payload: SalesRepCreate, session: Session, user: WriteUser):
-    obj = SalesRep(
-        **payload.model_dump(), created_by=user.subject, updated_by=user.subject
-    )
+    data = payload.model_dump()
+    if data.get("lead_eligible") is None:
+        data["lead_eligible"] = payload.type == RepType.AM
+    obj = SalesRep(**data, created_by=user.subject, updated_by=user.subject)
     session.add(obj)
     await session.flush()
     await record_audit(

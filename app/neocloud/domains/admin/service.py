@@ -58,6 +58,7 @@ class AdminService:
         username = u["Username"]
         return AdminUser(
             username=username,
+            sub=self._attr(attrs, "sub"),
             email=self._attr(attrs, "email"),
             name=self._attr(attrs, "name"),
             status=u.get("UserStatus", "UNKNOWN"),
@@ -70,6 +71,18 @@ class AdminService:
     def list_users(self, limit: int = 60) -> list[AdminUser]:
         resp = self._client.list_users(UserPoolId=self._pool, Limit=limit)
         return [self._to_admin_user(u) for u in resp.get("Users", [])]
+
+    def list_all_users(self) -> list[AdminUser]:
+        """Every user in the pool (paginated). Used by the sales-rep sync."""
+        users: list[AdminUser] = []
+        kwargs: dict = {"UserPoolId": self._pool, "Limit": 60}
+        while True:
+            resp = self._client.list_users(**kwargs)
+            users.extend(self._to_admin_user(u) for u in resp.get("Users", []))
+            token = resp.get("PaginationToken")
+            if not token:
+                return users
+            kwargs["PaginationToken"] = token
 
     def get_user(self, username: str) -> AdminUser:
         try:

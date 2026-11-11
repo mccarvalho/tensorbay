@@ -74,7 +74,10 @@ async def pick_assignee(
 ) -> SalesRep | None:
     """Pick the Account Manager for a lead.
 
-    Pool: active AMs whose configured regions cover the lead; if none do, active
+    Eligible: active reps flagged ``lead_eligible`` (portal users in the SALES or
+    SALES_MANAGER role are synced to one - see ``sync_sales_reps``).
+
+    Pool: eligible AMs whose configured regions cover the lead; if none do, active
     AMs with no regions configured (catch-alls); if none, every active AM. Within
     the pool the AM with the fewest open leads wins, then the one assigned a lead
     least recently, then by name - a stable, fair round-robin.
@@ -82,7 +85,9 @@ async def pick_assignee(
     ams = (
         await session.execute(
             select(SalesRep).where(
-                SalesRep.type == RepType.AM, SalesRep.status == RepStatus.ACTIVE
+                SalesRep.lead_eligible.is_(True),
+                SalesRep.type != RepType.FINDER,
+                SalesRep.status == RepStatus.ACTIVE,
             )
         )
     ).scalars().all()
@@ -124,6 +129,96 @@ async def pick_assignee(
         )
 
     return sorted(pool, key=sort_key)[0]
+
+
+# --------------------------------------------------------------------------- #
+# Sales users -> reps
+# --------------------------------------------------------------------------- #
+LEAD_ROLES = {"SALES", "SALES_MANAGER"}
+
+
+@dataclass
+class SyncResult:
+    created: int = 0
+    enabled: int = 0
+    disabled: int = 0
+
+
+def _norm(email: str | None) -> str:
+    return (email or "").strip().lower()
+
+
+async def sync_sales_reps(session: AsyncSession, users: list, actor: str) -> SyncResult:
+    """Make every enabled SALES / SALES_MANAGER portal user a lead-eligible rep.
+
+    ``users`` are admin users (``username, sub, email, name, enabled, roles``).
+    * Eligible user with no rep -> an AM rep is created, linked by sub + email.
+    * Eligible user with a rep (matched by sub, then email) -> flagged eligible and
+      linked; the rep's type/status/regions are left alone.
+    * A linked rep whose user lost the role, was disabled or deleted -> no longer
+      eligible. Reps never linked to a portal user are never touched.
+    Users are grouped by email so a native + Google twin of one person count once.
+    """
+    result = SyncResult()
+    by_email: dict[str, list] = {}
+    for u in users:
+        if _norm(u.email):
+            by_email.setdefault(_norm(u.email), []).append(u)
+
+    reps = list((await session.execute(select(SalesRep))).scalars().all())
+    seen_rep_ids: set[str] = set()
+
+    for email, group in by_email.items():
+        active = [u for u in group if u.enabled and LEAD_ROLES & set(u.roles or [])]
+        subs = {u.sub for u in group if u.sub}
+        rep = next((r for r in reps if r.cognito_sub and r.cognito_sub in subs), None)
+        if rep is None:
+            rep = next(
+                (r for r in reps if _norm(r.email) == email and r.type != RepType.FINDER),
+                None,
+            )
+        if rep is not None:
+            seen_rep_ids.add(rep.id)
+
+        if active:
+            lead_user = active[0]
+            if rep is None:
+                rep = SalesRep(
+                    name=(lead_user.name or email.split("@")[0]).strip(),
+                    email=email,
+                    type=RepType.AM,
+                    status=RepStatus.ACTIVE,
+                    cognito_sub=lead_user.sub,
+                    lead_eligible=True,
+                    created_by=actor,
+                    updated_by=actor,
+                )
+                session.add(rep)
+                reps.append(rep)
+                result.created += 1
+            else:
+                if not rep.lead_eligible:
+                    rep.lead_eligible = True
+                    result.enabled += 1
+                if not rep.cognito_sub:
+                    rep.cognito_sub = lead_user.sub
+                if not rep.email:
+                    rep.email = email
+                rep.updated_by = actor
+        elif rep is not None and rep.lead_eligible:
+            rep.lead_eligible = False
+            rep.updated_by = actor
+            result.disabled += 1
+
+    # Linked reps whose user no longer exists at all.
+    for rep in reps:
+        if rep.id and rep.id not in seen_rep_ids and rep.cognito_sub and rep.lead_eligible:
+            rep.lead_eligible = False
+            rep.updated_by = actor
+            result.disabled += 1
+
+    await session.flush()
+    return result
 
 
 # --------------------------------------------------------------------------- #

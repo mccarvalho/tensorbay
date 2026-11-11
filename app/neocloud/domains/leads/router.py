@@ -44,7 +44,7 @@ from neocloud.domains.customers.models import (
     Customer,
     CustomerStatus,
 )
-from neocloud.domains.economics.models import RepType, SalesRep
+from neocloud.domains.economics.models import SalesRep
 from neocloud.domains.leads import service as lead_service
 from neocloud.domains.leads.models import OPEN_STATUSES, Lead, LeadStatus
 from neocloud.domains.leads.parsing import (
@@ -269,9 +269,12 @@ def _is_privileged(user: CurrentUser) -> bool:
 
 
 async def _rep_ids_for_user(session: AsyncSession, user: CurrentUser) -> list[str]:
-    result = await session.execute(
-        select(SalesRep.id).where(SalesRep.cognito_sub == user.subject)
-    )
+    # Match by Cognito sub, or by the (verified) email on the token so that a
+    # Google sign-in and an invited native login of the same person both work.
+    cond = SalesRep.cognito_sub == user.subject
+    if user.email:
+        cond = or_(cond, func.lower(SalesRep.email) == user.email.strip().lower())
+    result = await session.execute(select(SalesRep.id).where(cond))
     return list(result.scalars().all())
 
 
@@ -310,7 +313,7 @@ async def create_lead(
     if _is_privileged(user):
         if payload.assigned_rep_id:
             assignee = await session.get(SalesRep, payload.assigned_rep_id)
-            if assignee is None or assignee.type != RepType.AM:
+            if assignee is None or not assignee.lead_eligible:
                 raise HTTPException(status_code=404, detail="Account Manager not found")
         else:
             assignee = await lead_service.pick_assignee(session, region, country)

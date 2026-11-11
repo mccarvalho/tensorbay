@@ -11,6 +11,7 @@ from neocloud.audit.service import record_audit
 from neocloud.auth.dependencies import CurrentUser, require_permission
 from neocloud.auth.rbac import Permission
 from neocloud.core.config import Settings, get_settings
+from neocloud.core.logging import get_logger
 from neocloud.db.session import get_session
 from neocloud.domains.admin.schemas import (
     ASSIGNABLE_ROLES,
@@ -24,6 +25,23 @@ from neocloud.domains.admin.service import AdminService
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 ENTITY_USER = "cognito_user"
+logger = get_logger(__name__)
+
+
+async def _sync_reps(service: AdminService, session: AsyncSession, actor: str):
+    """Mirror SALES / SALES_MANAGER users into lead-eligible reps. Best effort for
+    the admin actions that trigger it: a sync problem must never undo or fail the
+    user change itself (the explicit sync endpoint below reports errors)."""
+    from neocloud.domains.leads.service import sync_sales_reps
+
+    return await sync_sales_reps(session, service.list_all_users(), actor)
+
+
+async def _sync_reps_quietly(service: AdminService, session: AsyncSession, actor: str) -> None:
+    try:
+        await _sync_reps(service, session, actor)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("sales_rep_sync_failed", error=str(exc))
 
 
 def _service(settings: Settings = Depends(get_settings)) -> AdminService:
@@ -72,6 +90,7 @@ async def invite_user(
         actor=user.subject,
         new_value={"email": payload.email, "roles": payload.roles},
     )
+    await _sync_reps_quietly(service, session, user.subject)
     await session.commit()
     return created
 
@@ -95,6 +114,7 @@ async def set_roles(
         old_value={"roles": before.roles},
         new_value={"roles": updated.roles},
     )
+    await _sync_reps_quietly(service, session, user.subject)
     await session.commit()
     return updated
 
@@ -111,6 +131,7 @@ async def enable_user(
         session, action="enable", entity_type=ENTITY_USER,
         entity_id=username, actor=user.subject,
     )
+    await _sync_reps_quietly(service, session, user.subject)
     await session.commit()
     return updated
 
@@ -127,6 +148,7 @@ async def disable_user(
         session, action="disable", entity_type=ENTITY_USER,
         entity_id=username, actor=user.subject,
     )
+    await _sync_reps_quietly(service, session, user.subject)
     await session.commit()
     return updated
 
@@ -143,4 +165,32 @@ async def delete_user(
         session, action="delete", entity_type=ENTITY_USER,
         entity_id=username, actor=user.subject,
     )
+    await _sync_reps_quietly(service, session, user.subject)
     await session.commit()
+
+
+@router.post("/sync-sales-reps")
+async def sync_sales_reps_endpoint(
+    user: CurrentUser = Depends(require_permission(Permission.USER_ADMIN)),
+    service: AdminService = Depends(_service),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Make every SALES / SALES_MANAGER user an Account Manager for lead routing.
+
+    Idempotent. Also runs automatically after invites, role changes, enable /
+    disable and deletes; use this to backfill existing users."""
+    result = await _sync_reps(service, session, user.subject)
+    await record_audit(
+        session,
+        action="sync_sales_reps",
+        entity_type=ENTITY_USER,
+        entity_id="*",
+        actor=user.subject,
+        new_value={
+            "created": result.created,
+            "enabled": result.enabled,
+            "disabled": result.disabled,
+        },
+    )
+    await session.commit()
+    return {"created": result.created, "enabled": result.enabled, "disabled": result.disabled}

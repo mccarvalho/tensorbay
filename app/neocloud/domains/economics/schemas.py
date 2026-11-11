@@ -24,7 +24,8 @@ class SalesRepBase(BaseModel):
 
 
 class SalesRepCreate(SalesRepBase):
-    pass
+    # None = default: Account Managers take part in lead routing, others don't.
+    lead_eligible: bool | None = None
 
 
 class SalesRepUpdate(BaseModel):
@@ -36,6 +37,7 @@ class SalesRepUpdate(BaseModel):
     cognito_sub: str | None = Field(default=None, max_length=64)
     payment_details: str | None = None
     regions: str | None = Field(default=None, max_length=255)
+    lead_eligible: bool | None = None
     notes: str | None = None
 
 
@@ -43,6 +45,7 @@ class SalesRepRead(SalesRepBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    lead_eligible: bool
     created_at: datetime
     updated_at: datetime
 

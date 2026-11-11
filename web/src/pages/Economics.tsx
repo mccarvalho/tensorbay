@@ -31,7 +31,7 @@ type Component = 'AE' | 'AM' | 'FINDER';
 
 interface Rep {
   id: string; name: string; email: string | null; type: RepType; status: RepStatus;
-  base_salary: string | null; cognito_sub: string | null; payment_details: string | null; regions: string | null; notes: string | null;
+  base_salary: string | null; cognito_sub: string | null; payment_details: string | null; regions: string | null; notes: string | null; lead_eligible: boolean;
 }
 interface Deal {
   id: string; name: string; customer_id: string; opportunity_id: string | null; plan_id: string | null;
@@ -159,12 +159,13 @@ function DashboardTab() {
 // --------------------------------------------------------------------------- //
 // Reps tab
 // --------------------------------------------------------------------------- //
-const emptyRep = () => ({ name: '', email: '', type: 'AE' as RepType, status: 'ACTIVE' as RepStatus, base_salary: '', cognito_sub: '', payment_details: '', regions: '', notes: '' });
+const emptyRep = () => ({ name: '', email: '', type: 'AE' as RepType, status: 'ACTIVE' as RepStatus, base_salary: '', cognito_sub: '', payment_details: '', regions: '', notes: '', lead_eligible: false });
 
 function RepsTab() {
   const qc = useQueryClient();
   const toast = useToast();
   const canWrite = hasPermission('economics.write');
+  const canSync = hasPermission('user.admin');
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyRep());
@@ -181,11 +182,20 @@ function RepsTab() {
         base_salary: form.base_salary ? form.base_salary : null,
         cognito_sub: form.cognito_sub || null, payment_details: form.payment_details || null,
         regions: form.regions || null, notes: form.notes || null,
+        lead_eligible: form.lead_eligible,
       };
       return editId ? api.patch<Rep>(`/v1/economics/reps/${editId}`, payload) : api.post<Rep>('/v1/economics/reps', payload);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['eco-reps'] }); toast.success(editId ? 'Rep updated' : 'Rep created'); setOpen(false); reset(); },
     onError: (e) => toast.error(errMessage(e, 'Could not save rep')),
+  });
+  const sync = useMutation({
+    mutationFn: () => api.post<{ created: number; enabled: number; disabled: number }>('/v1/admin/sync-sales-reps', {}),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['eco-reps'] });
+      toast.success(`Synced: ${r.created} added, ${r.enabled} enabled, ${r.disabled} disabled`);
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not sync Sales users')),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.del<void>(`/v1/economics/reps/${id}`),
@@ -195,14 +205,14 @@ function RepsTab() {
 
   function openEdit(r: Rep) {
     setEditId(r.id);
-    setForm({ name: r.name, email: r.email ?? '', type: r.type, status: r.status, base_salary: r.base_salary ?? '', cognito_sub: r.cognito_sub ?? '', payment_details: r.payment_details ?? '', regions: r.regions ?? '', notes: r.notes ?? '' });
+    setForm({ name: r.name, email: r.email ?? '', type: r.type, status: r.status, base_salary: r.base_salary ?? '', cognito_sub: r.cognito_sub ?? '', payment_details: r.payment_details ?? '', regions: r.regions ?? '', notes: r.notes ?? '', lead_eligible: r.lead_eligible });
     setOpen(true);
   }
 
   const columns: Array<Column<Rep>> = [
     { key: 'name', header: 'Name', render: (r) => <div className="flex flex-col"><span className="font-medium text-white">{r.name}</span>{r.email && <span className="text-xs text-grape-soft">{r.email}</span>}</div> },
     { key: 'type', header: 'Role', render: (r) => <Badge tone={REP_TONE[r.type]}>{r.type}</Badge> },
-    { key: 'regions', header: 'Lead regions', render: (r) => r.type === 'AM' ? (r.regions || <span className="text-grape-soft">all (catch-all)</span>) : <span className="text-grape-soft">—</span> },
+    { key: 'regions', header: 'Leads', render: (r) => r.lead_eligible ? (r.regions || <span className="text-grape-soft">all (catch-all)</span>) : <span className="text-grape-soft">not receiving leads</span> },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'ACTIVE' ? 'success' : 'neutral'}>{r.status}</Badge> },
     { key: 'base_salary', header: 'Base salary', className: 'text-right', render: (r) => r.base_salary ? usd(r.base_salary) : '—' },
     { key: 'portal', header: 'Portal', render: (r) => r.cognito_sub ? <Badge tone="cyan">linked</Badge> : <span className="text-grape-soft">—</span> },
@@ -219,7 +229,15 @@ function RepsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">{canWrite && <button type="button" className="btn-primary" onClick={() => { reset(); setOpen(true); }}>+ New Rep</button>}</div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {canSync && (
+          <button type="button" className="btn-ghost" disabled={sync.isPending} onClick={() => sync.mutate()}
+            title="Make every SALES / SALES_MANAGER user an Account Manager for lead routing">
+            {sync.isPending ? 'Syncing…' : 'Sync Sales users'}
+          </button>
+        )}
+        {canWrite && <button type="button" className="btn-primary" onClick={() => { reset(); setOpen(true); }}>+ New Rep</button>}
+      </div>
       {isLoading ? <Spinner label="Loading reps…" /> : isError ? <ErrorState error={error} /> : (
         <DataTable columns={columns} rows={data ?? []} rowKey={(r) => r.id}
           empty={<EmptyState title="No reps yet" hint="Add Account Executives, Account Managers and finders." />} />
@@ -238,10 +256,14 @@ function RepsTab() {
               </select></div>
           </div>
           <div><label className="label">Email</label><input className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-          {form.type === 'AM' && (
+          <label className="flex items-center gap-2 text-sm text-white">
+            <input type="checkbox" checked={form.lead_eligible} onChange={(e) => setForm({ ...form, lead_eligible: e.target.checked })} />
+            Receives inbound leads
+          </label>
+          {form.lead_eligible && (
             <div><label className="label">Lead regions (comma-separated)</label>
               <input className="input" placeholder="North America, LATAM — blank = catch-all" value={form.regions} onChange={(e) => setForm({ ...form, regions: e.target.value })} />
-              <p className="mt-1 text-xs text-grape-soft">Website leads from these regions are assigned to this Account Manager.</p></div>
+              <p className="mt-1 text-xs text-grape-soft">Website leads from these regions are assigned to this person. Users with the Sales or Sales Manager role are added automatically.</p></div>
           )}
           <div className="grid grid-cols-2 gap-4">
             <div><label className="label">Base salary (USD)</label><input className="input" type="number" min="0" value={form.base_salary} onChange={(e) => setForm({ ...form, base_salary: e.target.value })} /></div>

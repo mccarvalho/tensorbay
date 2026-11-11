@@ -19,7 +19,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from neocloud.db.base import AuditMixin, Base, UUIDMixin
@@ -67,6 +67,11 @@ class SalesRep(Base, UUIDMixin, AuditMixin):
     # Used to route inbound website leads to the right Account Manager. A rep with
     # no regions acts as a catch-all.
     regions: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # True when this rep takes part in inbound-lead routing. Kept in sync with the
+    # portal role (SALES / SALES_MANAGER) for linked users; AM reps default to True.
+    lead_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

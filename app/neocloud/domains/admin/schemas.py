@@ -11,6 +11,7 @@ ASSIGNABLE_ROLES = [r.value for r in Role]
 
 class AdminUser(BaseModel):
     username: str
+    sub: str | None = None
     email: str | None = None
     name: str | None = None
     status: str

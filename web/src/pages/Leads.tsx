@@ -52,7 +52,7 @@ interface Lead {
   created_at: string;
 }
 
-interface Rep { id: string; name: string; type: 'AE' | 'AM' | 'FINDER'; status: 'ACTIVE' | 'INACTIVE' }
+interface Rep { id: string; name: string; type: 'AE' | 'AM' | 'FINDER'; status: 'ACTIVE' | 'INACTIVE'; lead_eligible: boolean }
 
 interface ConvertResult {
   lead: Lead;
@@ -195,7 +195,7 @@ export default function Leads() {
 
       {creating && (
         <NewLeadModal
-          ams={(reps.data ?? []).filter((r) => r.type === 'AM' && r.status === 'ACTIVE')}
+          ams={(reps.data ?? []).filter((r) => r.lead_eligible && r.status === 'ACTIVE')}
           manager={manager}
           onClose={() => setCreating(false)}
           onCreated={(l) => { setCreating(false); refresh(); setOpenId(l.id); }}
@@ -206,7 +206,7 @@ export default function Leads() {
         <LeadModal
           lead={open}
           repName={repName}
-          ams={(reps.data ?? []).filter((r) => r.type === 'AM' && r.status === 'ACTIVE')}
+          ams={(reps.data ?? []).filter((r) => r.lead_eligible && r.status === 'ACTIVE')}
           canWrite={canWrite}
           manager={manager}
           onClose={() => setOpenId(null)}

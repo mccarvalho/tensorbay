@@ -57,6 +57,23 @@ class LeadIngest(BaseModel):
         return v
 
 
+class LeadCreate(BaseModel):
+    """A lead entered by hand in the portal (phone call, event, referral, ...)."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    company: str | None = Field(default=None, max_length=255)
+    sku_of_interest: str | None = Field(default=None, max_length=255)
+    gpu_count: int | None = Field(default=None, gt=0, le=10_000_000)
+    pricing_model_or_term: str | None = Field(default=None, max_length=255)
+    region: str | None = Field(default=None, max_length=255)
+    country: str | None = Field(default=None, max_length=128)
+    message: str | None = Field(default=None, max_length=5000)
+    source: str | None = Field(default=None, max_length=64)
+    # Managers may pick the AM; AMs always get their own leads. Blank = auto-route.
+    assigned_rep_id: str | None = None
+
+
 class LeadIngestResult(BaseModel):
     id: str
     status: str  # "created" | "duplicate"

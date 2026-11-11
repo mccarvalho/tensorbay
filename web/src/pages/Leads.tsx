@@ -89,6 +89,7 @@ export default function Leads() {
   const [reviewOnly, setReviewOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const reps = useQuery({ queryKey: ['eco-reps'], queryFn: () => api.get<Rep[]>('/v1/economics/reps?limit=500') });
   const repName = useMemo(() => Object.fromEntries((reps.data ?? []).map((r) => [r.id, r.name])), [reps.data]);
@@ -172,6 +173,11 @@ export default function Leads() {
           Needs review only
         </label>
         {newCount > 0 && <Badge tone="cyan">{newCount} new</Badge>}
+        {canWrite && (
+          <button type="button" className="btn-primary ml-auto" onClick={() => setCreating(true)}>
+            + New lead
+          </button>
+        )}
       </div>
 
       {leads.isLoading ? (
@@ -183,7 +189,16 @@ export default function Leads() {
           columns={columns}
           rows={leads.data ?? []}
           rowKey={(l) => l.id}
-          empty={<EmptyState title="No leads" hint="New website pricing requests will appear here automatically." />}
+          empty={<EmptyState title="No leads" hint="Website pricing requests appear here automatically. You can also add one with “New lead”." />}
+        />
+      )}
+
+      {creating && (
+        <NewLeadModal
+          ams={(reps.data ?? []).filter((r) => r.type === 'AM' && r.status === 'ACTIVE')}
+          manager={manager}
+          onClose={() => setCreating(false)}
+          onCreated={(l) => { setCreating(false); refresh(); setOpenId(l.id); }}
         />
       )}
 
@@ -208,6 +223,107 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="label">{label}</span>
       <span className="text-sm text-white">{children || <span className="text-grape-soft">—</span>}</span>
     </div>
+  );
+}
+
+const LEAD_SOURCES = ['manual', 'phone', 'event', 'referral', 'linkedin', 'direct_email', 'other'];
+
+function NewLeadModal({
+  ams, manager, onClose, onCreated,
+}: { ams: Rep[]; manager: boolean; onClose: () => void; onCreated: (l: Lead) => void }) {
+  const toast = useToast();
+  const [form, setForm] = useState({
+    name: '', email: '', company: '', source: 'manual', region: '', country: '',
+    sku_of_interest: '', gpu_count: '', pricing_model_or_term: '', message: '', assigned_rep_id: '',
+  });
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
+    setForm({ ...form, [k]: e.target.value });
+  const orNull = (v: string) => (v.trim() ? v.trim() : null);
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post<Lead>('/v1/leads', {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        company: orNull(form.company),
+        source: form.source,
+        region: orNull(form.region),
+        country: orNull(form.country),
+        sku_of_interest: orNull(form.sku_of_interest),
+        gpu_count: form.gpu_count ? Number(form.gpu_count) : null,
+        pricing_model_or_term: orNull(form.pricing_model_or_term),
+        message: orNull(form.message),
+        assigned_rep_id: manager && form.assigned_rep_id ? form.assigned_rep_id : null,
+      }),
+    onSuccess: (l) => { toast.success('Lead created'); onCreated(l); },
+    onError: (e) => toast.error(errMessage(e, 'Could not create lead')),
+  });
+
+  return (
+    <Modal open onClose={onClose} title="New lead">
+      <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); create.mutate(); }}>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label" htmlFor="nl_name">Name *</label>
+            <input id="nl_name" className="input" required maxLength={255} value={form.name} onChange={set('name')} />
+          </div>
+          <div>
+            <label className="label" htmlFor="nl_email">Email *</label>
+            <input id="nl_email" className="input" type="email" required value={form.email} onChange={set('email')} />
+          </div>
+          <div>
+            <label className="label" htmlFor="nl_company">Company</label>
+            <input id="nl_company" className="input" maxLength={255} value={form.company} onChange={set('company')} />
+          </div>
+          <div>
+            <label className="label" htmlFor="nl_source">Source</label>
+            <select id="nl_source" className="input" value={form.source} onChange={set('source')}>
+              {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="nl_region">Region</label>
+            <input id="nl_region" className="input" placeholder="e.g. North America" value={form.region} onChange={set('region')} />
+          </div>
+          <div>
+            <label className="label" htmlFor="nl_country">Country</label>
+            <input id="nl_country" className="input" value={form.country} onChange={set('country')} />
+          </div>
+          <div>
+            <label className="label" htmlFor="nl_sku">SKU of interest</label>
+            <input id="nl_sku" className="input" placeholder="e.g. H100" value={form.sku_of_interest} onChange={set('sku_of_interest')} />
+          </div>
+          <div>
+            <label className="label" htmlFor="nl_gpus">GPU count</label>
+            <input id="nl_gpus" className="input" type="number" min="1" value={form.gpu_count} onChange={set('gpu_count')} />
+          </div>
+          <div className="col-span-2">
+            <label className="label" htmlFor="nl_term">Pricing model / term</label>
+            <input id="nl_term" className="input" maxLength={255} value={form.pricing_model_or_term} onChange={set('pricing_model_or_term')} />
+          </div>
+          {manager && (
+            <div className="col-span-2">
+              <label className="label" htmlFor="nl_am">Account Manager</label>
+              <select id="nl_am" className="input" value={form.assigned_rep_id} onChange={set('assigned_rep_id')}>
+                <option value="">Auto-assign by region</option>
+                {ams.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="col-span-2">
+            <label className="label" htmlFor="nl_msg">Notes / message</label>
+            <textarea id="nl_msg" className="input" rows={3} maxLength={5000} value={form.message} onChange={set('message')} />
+          </div>
+        </div>
+        {!manager && <p className="text-xs text-grape-soft">This lead will be assigned to you.</p>}
+        <div className="mt-2 flex justify-end gap-3">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary" disabled={create.isPending}>
+            {create.isPending ? 'Creating…' : 'Create lead'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

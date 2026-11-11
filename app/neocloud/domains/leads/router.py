@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -43,7 +44,7 @@ from neocloud.domains.customers.models import (
     Customer,
     CustomerStatus,
 )
-from neocloud.domains.economics.models import SalesRep
+from neocloud.domains.economics.models import RepType, SalesRep
 from neocloud.domains.leads import service as lead_service
 from neocloud.domains.leads.models import OPEN_STATUSES, Lead, LeadStatus
 from neocloud.domains.leads.parsing import (
@@ -55,6 +56,7 @@ from neocloud.domains.leads.parsing import (
 from neocloud.domains.leads.schemas import (
     LeadConvert,
     LeadConvertResult,
+    LeadCreate,
     LeadDisqualify,
     LeadIngest,
     LeadIngestResult,
@@ -285,6 +287,110 @@ async def _get_visible_lead(session: AsyncSession, lead_id: str, user: CurrentUs
     if not _is_privileged(user):
         if lead.assigned_rep_id not in await _rep_ids_for_user(session, user):
             raise HTTPException(status_code=403, detail="Not your lead")
+    return lead
+
+
+@router.post("", response_model=LeadRead, status_code=status.HTTP_201_CREATED)
+async def create_lead(
+    payload: LeadCreate,
+    background: BackgroundTasks,
+    session: Session,
+    settings: Annotated[Settings, Depends(get_settings)],
+    user: WriteUser,
+):
+    """Enter a lead by hand. Managers may choose the AM (or leave it to routing);
+    an Account Manager's own entries are assigned to themselves."""
+    email = str(payload.email).strip().lower()
+    region = clean(payload.region)
+    country = clean(payload.country)
+    if region and not country:
+        region, country = split_region(region)
+
+    assignee: SalesRep | None
+    if _is_privileged(user):
+        if payload.assigned_rep_id:
+            assignee = await session.get(SalesRep, payload.assigned_rep_id)
+            if assignee is None or assignee.type != RepType.AM:
+                raise HTTPException(status_code=404, detail="Account Manager not found")
+        else:
+            assignee = await lead_service.pick_assignee(session, region, country)
+    else:
+        mine = await _rep_ids_for_user(session, user)
+        if not mine:
+            raise HTTPException(
+                status_code=403,
+                detail="Your user is not linked to an Account Manager record",
+            )
+        assignee = await session.get(SalesRep, mine[0])
+
+    prior = (
+        await session.execute(
+            select(Lead)
+            .where(func.lower(Lead.email) == email, Lead.status.in_(OPEN_STATUSES))
+            .order_by(Lead.created_at.asc())
+            .limit(1)
+        )
+    ).scalars().first()
+
+    lead = Lead(
+        submission_id=f"manual-{uuid.uuid4()}",
+        source=clean(payload.source) or "manual",
+        name=payload.name.strip(),
+        email=email,
+        company=clean(payload.company),
+        sku_of_interest=clean(payload.sku_of_interest),
+        gpu_count=payload.gpu_count,
+        pricing_model_or_term=clean(payload.pricing_model_or_term),
+        region=region,
+        country=country,
+        message=clean(payload.message),
+        submitted_at=datetime.now(timezone.utc),
+        status=LeadStatus.NEW,
+        assigned_rep_id=assignee.id if assignee else None,
+        needs_review=False,
+        duplicate_of_id=prior.id if prior else None,
+        raw_payload=None,
+        created_by=user.subject,
+        updated_by=user.subject,
+    )
+    session.add(lead)
+    await session.flush()
+    await record_audit(
+        session,
+        action="create",
+        entity_type=ENTITY_LEAD,
+        entity_id=lead.id,
+        actor=user.subject,
+        new_value={
+            "source": lead.source,
+            "region": lead.region,
+            "assigned_rep_id": lead.assigned_rep_id,
+        },
+    )
+
+    # Tell the AM only when somebody else entered the lead for them.
+    if assignee and assignee.email and assignee.cognito_sub != user.subject:
+        notice = lead_service.LeadNotice(
+            lead_id=lead.id,
+            name=lead.name,
+            email=lead.email,
+            company=lead.company,
+            sku_of_interest=lead.sku_of_interest,
+            gpu_count=lead.gpu_count,
+            pricing_model_or_term=lead.pricing_model_or_term,
+            region=lead.region,
+            country=lead.country,
+            message=lead.message,
+            assignee_name=assignee.name,
+            is_repeat=prior is not None,
+            needs_review=False,
+            heading="A lead was assigned to you",
+        )
+        background.add_task(
+            lead_service.send_new_lead_email, settings, notice, [assignee.email]
+        )
+
+    await session.refresh(lead)
     return lead
 
 

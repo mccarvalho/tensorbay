@@ -387,6 +387,97 @@ async def test_account_manager_only_sees_own_leads(client: AsyncClient, as_am) -
     ).status_code == 403
 
 
+# --------------------------------------------------------------------------- #
+# Manual entry
+# --------------------------------------------------------------------------- #
+async def test_manual_lead_is_created_and_auto_routed(client: AsyncClient) -> None:
+    na = await _am(client, "Nora NA", "North America")
+    r = await client.post(
+        f"{V1}/leads",
+        json={"name": " Pat Doe ", "email": "Pat@Example.com", "company": "Acme",
+              "region": "North America · United States", "gpu_count": 16, "source": "phone"},
+    )
+    assert r.status_code == 201, r.text
+    lead = r.json()
+    assert lead["email"] == "pat@example.com"
+    assert lead["name"] == "Pat Doe"
+    assert lead["source"] == "phone"
+    assert lead["country"] == "United States"
+    assert lead["status"] == "NEW"
+    assert lead["assigned_rep_id"] == na["id"]
+    assert lead["submission_id"].startswith("manual-")
+    # Two manual leads with the same email both succeed (unique ids) and link up.
+    again = (await client.post(f"{V1}/leads", json={"name": "Pat", "email": "pat@example.com"})).json()
+    assert again["id"] != lead["id"]
+    assert again["duplicate_of_id"] == lead["id"]
+    assert again["source"] == "manual"
+
+
+async def test_manager_can_pick_the_am_and_bad_picks_are_rejected(client: AsyncClient) -> None:
+    await _am(client, "Nora NA", "North America")
+    emea = await _am(client, "Eve EMEA", "EMEA")
+    ae = (await client.post(f"{V1}/economics/reps", json={"name": "An AE", "type": "AE"})).json()
+    ok = await client.post(
+        f"{V1}/leads",
+        json={"name": "X", "email": "x@example.com", "region": "North America",
+              "assigned_rep_id": emea["id"]},
+    )
+    assert ok.json()["assigned_rep_id"] == emea["id"]  # explicit choice beats routing
+    for bad in (ae["id"], "does-not-exist"):
+        r = await client.post(
+            f"{V1}/leads", json={"name": "X", "email": "x@example.com", "assigned_rep_id": bad}
+        )
+        assert r.status_code == 404
+
+
+async def test_manual_lead_validation(client: AsyncClient) -> None:
+    assert (await client.post(f"{V1}/leads", json={"name": "No email"})).status_code == 422
+    assert (await client.post(f"{V1}/leads", json={"name": "", "email": "a@b.co"})).status_code == 422
+    bad_gpu = await client.post(f"{V1}/leads", json={"name": "A", "email": "a@b.co", "gpu_count": 0})
+    assert bad_gpu.status_code == 422
+
+
+async def test_account_manager_manual_lead_is_assigned_to_self(client: AsyncClient, as_am) -> None:
+    mine = (await client.post(
+        f"{V1}/economics/reps",
+        json={"name": "Mine", "type": "AM", "regions": "EMEA", "cognito_sub": "sub-mine"},
+    )).json()
+    other = (await client.post(
+        f"{V1}/economics/reps",
+        json={"name": "Other", "type": "AM", "regions": "LATAM", "cognito_sub": "sub-other"},
+    )).json()
+    as_am("sub-mine")
+    # Region says LATAM and an AM tries to hand it to someone else: still theirs.
+    r = await client.post(
+        f"{V1}/leads",
+        json={"name": "Z", "email": "z@example.com", "region": "LATAM",
+              "assigned_rep_id": other["id"]},
+    )
+    assert r.status_code == 201
+    assert r.json()["assigned_rep_id"] == mine["id"]
+    assert len((await client.get(f"{V1}/leads")).json()) == 1  # and they can see it
+
+
+async def test_unlinked_sales_user_cannot_create_leads(client: AsyncClient, as_am) -> None:
+    as_am("sub-not-a-rep")
+    r = await client.post(f"{V1}/leads", json={"name": "Z", "email": "z@example.com"})
+    assert r.status_code == 403
+
+
+async def test_viewer_without_write_permission_cannot_create(client: AsyncClient) -> None:
+    from neocloud.main import app
+
+    roles = ["EXECUTIVE"]  # lead.read only
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        subject="exec", email=None, roles=roles, permissions=permissions_for_roles(roles)
+    )
+    try:
+        r = await client.post(f"{V1}/leads", json={"name": "Z", "email": "z@example.com"})
+        assert r.status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
 async def test_user_without_lead_permission_is_denied(client: AsyncClient) -> None:
     from neocloud.main import app
 

@@ -146,6 +146,7 @@ class LeadNotice:
     assignee_name: str | None
     is_repeat: bool
     needs_review: bool
+    heading: str = "New pricing request"
 
 
 def lead_recipients(settings: Settings, assignee_email: str | None) -> list[str]:
@@ -207,7 +208,7 @@ def send_new_lead_email(settings: Settings, notice: LeadNotice, recipients: list
       <div style="font-size:11px;letter-spacing:3px;color:#B9A9D6;text-transform:uppercase;margin-top:4px;">GPU Control Plane</div>
     </div>
     <div style="background:#1a0a3a;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:28px;">
-      <h1 style="margin:0 0 16px;font-size:20px;color:#ffffff;">New pricing request</h1>
+      <h1 style="margin:0 0 16px;font-size:20px;color:#ffffff;">{e(notice.heading)}</h1>
       {flag_html}
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
         {row("Name", notice.name)}
@@ -225,7 +226,7 @@ def send_new_lead_email(settings: Settings, notice: LeadNotice, recipients: list
   </div>
 </div>"""
     text = (
-        f"New pricing request\n\nName: {notice.name}\nEmail: {notice.email}\n"
+        f"{notice.heading}\n\nName: {notice.name}\nEmail: {notice.email}\n"
         f"Company: {notice.company or '-'}\nRegion: {where or '-'}\n"
         f"SKU: {notice.sku_of_interest or '-'}\nGPU count: {notice.gpu_count or '-'}\n"
         f"Pricing/term: {notice.pricing_model_or_term or '-'}\n"

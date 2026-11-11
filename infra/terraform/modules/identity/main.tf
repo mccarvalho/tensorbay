@@ -36,6 +36,11 @@ resource "aws_cognito_user_pool" "this" {
     }
   }
 
+  # Link a first-time Google sign-in to the invited user (see pre_signup.tf).
+  lambda_config {
+    pre_sign_up = aws_lambda_function.pre_signup.arn
+  }
+
   tags = var.tags
 }
 

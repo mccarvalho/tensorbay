@@ -1,7 +1,10 @@
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { handleCallback } from '../auth';
+import { handleCallback, login } from '../auth';
 import { Spinner } from '../components/ui';
+
+// Guards the one automatic retry described below, so it can never loop.
+const RELINK_RETRY_KEY = 'neocloud.relink_retry';
 
 export default function Callback(): ReactElement {
   const [params] = useSearchParams();
@@ -16,6 +19,17 @@ export default function Callback(): ReactElement {
     const errParam = params.get('error');
     const errDesc = params.get('error_description');
     if (errParam) {
+      // First sign-in after an invited user's Google identity gets linked: Cognito
+      // can report this once, and signing in again completes it. Retry
+      // automatically (once) instead of showing the person an error.
+      if (
+        /already found an entry for username/i.test(errDesc ?? '') &&
+        !sessionStorage.getItem(RELINK_RETRY_KEY)
+      ) {
+        sessionStorage.setItem(RELINK_RETRY_KEY, '1');
+        void login({ useGoogle: true });
+        return;
+      }
       setError(errDesc ? `${errParam}: ${errDesc}` : errParam);
       return;
     }
@@ -27,7 +41,10 @@ export default function Callback(): ReactElement {
     }
 
     handleCallback(code)
-      .then(() => navigate('/', { replace: true }))
+      .then(() => {
+        sessionStorage.removeItem(RELINK_RETRY_KEY);
+        navigate('/', { replace: true });
+      })
       .catch((e: unknown) =>
         setError(e instanceof Error ? e.message : 'Failed to complete sign-in.'),
       );

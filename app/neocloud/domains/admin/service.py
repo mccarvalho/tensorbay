@@ -79,6 +79,10 @@ class AdminService:
         return self._to_admin_user(u)
 
     def invite_user(self, email: str, name: str | None, roles: list[str]) -> AdminUser:
+        # Always store the email lower-cased: the Google sign-in is matched to this
+        # invited user by exact email (see the Cognito pre sign-up trigger), and
+        # Google reports lower-case addresses.
+        email = email.strip().lower()
         attrs = [
             {"Name": "email", "Value": email},
             {"Name": "email_verified", "Value": "true"},

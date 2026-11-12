@@ -12,12 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from neocloud.core.config import Settings
 from neocloud.core.logging import get_logger
 from neocloud.domains.customers.models import Activity, ActivityType, Contact
-from neocloud.domains.emailsync.gmail import (
-    GmailReader,
-    HistoryExpired,
-    MailReader,
-    load_service_account,
-)
+from neocloud.domains.emailsync import oauth
+from neocloud.domains.emailsync.gmail import HistoryExpired, MailReader, make_reader
 from neocloud.domains.emailsync.models import Mailbox, UnmatchedEmail, UnmatchedStatus
 from neocloud.domains.emailsync.parsing import (
     ParsedEmail,
@@ -178,23 +174,31 @@ async def sync_mailbox(
         mailbox.total_logged = (mailbox.total_logged or 0) + total.logged
     except Exception as exc:  # noqa: BLE001
         logger.error("mailbox_sync_failed", mailbox=mailbox.address, error=str(exc))
-        mailbox.last_error = str(exc)[:1000]
+        if type(exc).__name__ == "RefreshError" or "invalid_grant" in str(exc):
+            # The owner revoked access (or Google expired the grant): stop trying
+            # until an admin reconnects the mailbox.
+            mailbox.needs_reconnect = True
+            mailbox.last_error = "Google access was revoked or expired. Reconnect this mailbox."
+        else:
+            mailbox.last_error = str(exc)[:1000]
     mailbox.last_sync_at = now
     await session.flush()
     return total
 
 
 async def run_sync_once(session: AsyncSession, settings: Settings) -> dict[str, ProcessResult]:
-    """Sync every enabled mailbox. No-op (empty) if Gmail is not configured."""
-    info = load_service_account(settings)
-    if info is None:
+    """Sync every enabled, connected mailbox. No-op if Google isn't configured."""
+    if not oauth.is_configured(settings):
         return {}
     out: dict[str, ProcessResult] = {}
     mailboxes = (
         await session.execute(select(Mailbox).where(Mailbox.enabled.is_(True)))
     ).scalars().all()
     for mb in mailboxes:
-        out[mb.address] = await sync_mailbox(session, GmailReader(info, mb.address), mb, settings)
+        reader = make_reader(settings, mb)
+        if reader is None:
+            continue  # not connected yet / needs reconnect: nothing to do
+        out[mb.address] = await sync_mailbox(session, reader, mb, settings)
         await session.commit()
     return out
 

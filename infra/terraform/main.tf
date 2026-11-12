@@ -73,7 +73,8 @@ module "compute" {
     module.security.aurora_secret_arn,
     module.security.google_oidc_secret_arn,
     module.security.lead_ingest_secret_arn,
-    module.security.gmail_sa_secret_arn
+    module.security.gmail_oauth_secret_arn,
+    module.security.gmail_token_key_secret_arn
   ]
   secrets_kms_key_arn = module.security.kms_secrets_key_arn
 
@@ -82,25 +83,26 @@ module "compute" {
 
   # Non-secret runtime config injected into the container.
   environment_variables = {
-    APP_ENV                = var.environment
-    AWS_REGION             = var.aws_region
-    BEDROCK_MODEL_ID       = var.bedrock_model_id
-    DOCUMENTS_BUCKET       = aws_s3_bucket.data.bucket
-    AURORA_SECRET_ARN      = module.security.aurora_secret_arn
-    AURORA_HOST            = module.data.aurora_cluster_endpoint
-    AURORA_DATABASE        = var.aurora_database_name
-    GOOGLE_SSO_SECRET_ARN  = module.security.google_oidc_secret_arn
-    COGNITO_USER_POOL_ID   = module.identity.user_pool_id
-    COGNITO_CLIENT_ID      = module.identity.user_pool_client_id
-    SES_FROM_EMAIL         = var.ses_from_email
-    APP_BASE_URL           = var.app_base_url
-    SES_CONFIGURATION_SET  = module.email.configuration_set_name
-    ECONOMICS_ALERT_EMAILS = var.economics_alert_emails
-    LEAD_INGEST_SECRET_ARN = module.security.lead_ingest_secret_arn
-    LEAD_ALERT_EMAILS      = var.lead_alert_emails
-    GMAIL_SA_SECRET_ARN    = module.security.gmail_sa_secret_arn
-    EMAIL_SYNC_ENABLED     = "true"
-    INTERNAL_EMAIL_DOMAINS = "tensorbay.io"
+    APP_ENV                    = var.environment
+    AWS_REGION                 = var.aws_region
+    BEDROCK_MODEL_ID           = var.bedrock_model_id
+    DOCUMENTS_BUCKET           = aws_s3_bucket.data.bucket
+    AURORA_SECRET_ARN          = module.security.aurora_secret_arn
+    AURORA_HOST                = module.data.aurora_cluster_endpoint
+    AURORA_DATABASE            = var.aurora_database_name
+    GOOGLE_SSO_SECRET_ARN      = module.security.google_oidc_secret_arn
+    COGNITO_USER_POOL_ID       = module.identity.user_pool_id
+    COGNITO_CLIENT_ID          = module.identity.user_pool_client_id
+    SES_FROM_EMAIL             = var.ses_from_email
+    APP_BASE_URL               = var.app_base_url
+    SES_CONFIGURATION_SET      = module.email.configuration_set_name
+    ECONOMICS_ALERT_EMAILS     = var.economics_alert_emails
+    LEAD_INGEST_SECRET_ARN     = module.security.lead_ingest_secret_arn
+    LEAD_ALERT_EMAILS          = var.lead_alert_emails
+    GMAIL_OAUTH_SECRET_ARN     = module.security.gmail_oauth_secret_arn
+    GMAIL_TOKEN_KEY_SECRET_ARN = module.security.gmail_token_key_secret_arn
+    EMAIL_SYNC_ENABLED         = "true"
+    INTERNAL_EMAIL_DOMAINS     = "tensorbay.io"
   }
 
   tags = local.common_tags

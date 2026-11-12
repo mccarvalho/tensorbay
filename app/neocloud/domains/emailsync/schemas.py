@@ -22,6 +22,10 @@ class MailboxRead(BaseModel):
     address: str
     enabled: bool
     capture_unmatched: bool
+    connected: bool
+    connected_at: datetime | None
+    connected_by: str | None
+    needs_reconnect: bool
     last_sync_at: datetime | None
     last_error: str | None
     last_logged: int
@@ -29,8 +33,10 @@ class MailboxRead(BaseModel):
 
 
 class SyncStatus(BaseModel):
+    # True once the Google OAuth client and the token-encryption key are in place.
     configured: bool
-    service_account: str | None = None
+    # What to register as the authorized redirect URI in the Google OAuth client.
+    redirect_uri: str
     mailboxes: list[MailboxRead]
     pending_unmatched: int
 
@@ -66,3 +72,12 @@ class SyncRunResult(BaseModel):
     unmatched: int
     skipped: int
     error: str | None = None
+
+
+class ConnectStart(BaseModel):
+    authorization_url: str
+
+
+class ConnectComplete(BaseModel):
+    code: str = Field(..., min_length=1, max_length=2048)
+    state: str = Field(..., min_length=1, max_length=2048)

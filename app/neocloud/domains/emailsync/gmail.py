@@ -1,30 +1,22 @@
-"""Thin async wrapper over the Gmail API using a delegated service account.
+"""Thin async wrapper over the Gmail API using a mailbox owner's OAuth grant.
 
-The Google client is blocking, so every call runs in a worker thread. The
-service account impersonates exactly one mailbox per reader (``subject``), and
-only ever with the read-only scope.
+The Google client is blocking, so every call runs in a worker thread. A reader
+holds one mailbox's credentials and only ever has the read-only Gmail scope.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-import time
 from typing import Protocol
-
-import boto3
 
 from neocloud.core.config import Settings
 from neocloud.core.logging import get_logger
+from neocloud.domains.emailsync import oauth
 
 logger = get_logger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 SKIP_LABELS = {"SPAM", "TRASH", "DRAFT"}
 OPT_OUT_LABEL = "nocrm"  # a seller can label a thread "NoCRM" to keep it out
-
-_sa_cache: tuple[float, dict | None] | None = None
-_SA_TTL = 300
 
 
 class HistoryExpired(Exception):
@@ -38,48 +30,41 @@ class MailReader(Protocol):
     async def get_message(self, message_id: str) -> dict | None: ...
 
 
-def load_service_account(settings: Settings) -> dict | None:
-    """The service-account key as a dict, or None when not configured."""
-    global _sa_cache
-    raw: str | None = settings.gmail_sa_json
-    if not raw and settings.gmail_sa_secret_arn:
-        now = time.monotonic()
-        if _sa_cache and now - _sa_cache[0] < _SA_TTL:
-            return _sa_cache[1]
-        try:
-            client = boto3.client("secretsmanager", region_name=settings.aws_region)
-            raw = client.get_secret_value(SecretId=settings.gmail_sa_secret_arn)["SecretString"]
-        except Exception as exc:  # noqa: BLE001
-            logger.error("gmail_sa_secret_fetch_failed", error=str(exc))
-            return None
-    info: dict | None = None
-    try:
-        parsed = json.loads(raw or "{}")
-        if isinstance(parsed, dict) and parsed.get("private_key") and parsed.get("client_email"):
-            info = parsed
-    except json.JSONDecodeError:
-        info = None
-    if settings.gmail_sa_secret_arn and not settings.gmail_sa_json:
-        _sa_cache = (time.monotonic(), info)
-    return info
+def make_reader(settings: Settings, mailbox) -> "GmailReader | None":  # noqa: ANN001
+    """A reader for a connected mailbox, or None if it can't be built (not
+    connected, or the OAuth client / encryption key isn't configured)."""
+    from google.oauth2.credentials import Credentials
+
+    client = oauth.load_oauth_client(settings)
+    if client is None or not mailbox.refresh_token_enc or mailbox.needs_reconnect:
+        return None
+    refresh = oauth.decrypt_token(settings, mailbox.refresh_token_enc)
+    if not refresh:
+        return None
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh,
+        client_id=client.client_id,
+        client_secret=client.client_secret,
+        token_uri=oauth.TOKEN_URL,
+        scopes=[oauth.GMAIL_SCOPE],
+    )
+    return GmailReader(creds)
 
 
 class GmailReader:
-    def __init__(self, sa_info: dict, mailbox: str):
-        self._sa_info = sa_info
-        self._mailbox = mailbox
+    def __init__(self, credentials):  # noqa: ANN001 - google.oauth2.credentials.Credentials
+        self._credentials = credentials
         self._service = None
         self._skip_ids: set[str] | None = None
 
     def _svc(self):  # noqa: ANN202
         if self._service is None:
-            from google.oauth2 import service_account
             from googleapiclient.discovery import build
 
-            creds = service_account.Credentials.from_service_account_info(
-                self._sa_info, scopes=SCOPES, subject=self._mailbox
+            self._service = build(
+                "gmail", "v1", credentials=self._credentials, cache_discovery=False
             )
-            self._service = build("gmail", "v1", credentials=creds, cache_discovery=False)
         return self._service
 
     def _skip_label_ids(self) -> set[str]:

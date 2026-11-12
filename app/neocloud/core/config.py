@@ -74,10 +74,13 @@ class Settings(BaseSettings):
     # the Account Manager the lead is assigned to.
     lead_alert_emails: str = ""
     # --- Gmail sync (customer email -> activity timeline) ---
-    # Secrets Manager secret holding the Google service-account JSON key (domain-
-    # wide delegation, gmail.readonly). Empty / "{}" = not configured: sync idles.
-    gmail_sa_secret_arn: str | None = None
-    gmail_sa_json: str | None = None  # tests / local override
+    # Google OAuth web client {"client_id","client_secret"} and the Fernet key that
+    # encrypts stored refresh tokens ({"key": "..."}), both in Secrets Manager.
+    # The *_json / gmail_token_key fields are for tests / local overrides.
+    gmail_oauth_secret_arn: str | None = None
+    gmail_oauth_json: str | None = None
+    gmail_token_key_secret_arn: str | None = None
+    gmail_token_key: str | None = None
     email_sync_enabled: bool = False
     email_sync_interval_seconds: int = 120
     # Comma-separated company domains: addresses on these never count as customers.

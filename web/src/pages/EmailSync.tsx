@@ -13,10 +13,11 @@ import {
 
 interface Mailbox {
   id: string; address: string; enabled: boolean; capture_unmatched: boolean;
+  connected: boolean; connected_at: string | null; connected_by: string | null; needs_reconnect: boolean;
   last_sync_at: string | null; last_error: string | null; last_logged: number; total_logged: number;
 }
 interface SyncStatus {
-  configured: boolean; service_account: string | null; mailboxes: Mailbox[]; pending_unmatched: number;
+  configured: boolean; redirect_uri: string; mailboxes: Mailbox[]; pending_unmatched: number;
 }
 interface Unmatched {
   id: string; mailbox: string; direction: 'IN' | 'OUT'; from_addr: string; external_addrs: string;
@@ -41,9 +42,9 @@ export default function EmailSync() {
         <>
           {!status.data!.configured && (
             <div className="card border border-flamingo/40 text-sm">
-              <span className="font-semibold text-flamingo">Gmail is not connected yet.</span>{' '}
+              <span className="font-semibold text-flamingo">Google sign-in is not set up yet.</span>{' '}
               <span className="text-grape-soft">
-                A Google Workspace admin has to authorize the service account before any email is read.
+                The Google OAuth client has to be configured before a mailbox can be connected.
               </span>
             </div>
           )}
@@ -202,6 +203,16 @@ function Mailboxes({ status }: { status: SyncStatus }) {
     onSuccess: () => { toast.success('Mailbox removed'); refresh(); },
     onError: (e) => toast.error(errMessage(e, 'Could not remove mailbox')),
   });
+  const connect = useMutation({
+    mutationFn: (id: string) => api.post<{ authorization_url: string }>(`/v1/email-sync/mailboxes/${id}/connect`, {}),
+    onSuccess: (r) => { window.location.href = r.authorization_url; },
+    onError: (e) => toast.error(errMessage(e, 'Could not start the Google sign-in')),
+  });
+  const disconnect = useMutation({
+    mutationFn: (id: string) => api.post<Mailbox>(`/v1/email-sync/mailboxes/${id}/disconnect`, {}),
+    onSuccess: () => { toast.success('Disconnected'); refresh(); },
+    onError: (e) => toast.error(errMessage(e, 'Could not disconnect')),
+  });
   const sync = useMutation({
     mutationFn: (id: string) => api.post<{ mailbox: string; logged: number; unmatched: number; skipped: number; error: string | null }>(`/v1/email-sync/mailboxes/${id}/sync`, {}),
     onSuccess: (r) => {
@@ -215,6 +226,14 @@ function Mailboxes({ status }: { status: SyncStatus }) {
   const columns: Array<Column<Mailbox>> = [
     { key: 'addr', header: 'Mailbox', render: (m) => <span className="font-medium text-white">{m.address}</span> },
     { key: 'kind', header: 'Mode', render: (m) => m.capture_unmatched ? <Badge tone="cyan">shared inbox</Badge> : <Badge tone="grape">customer emails only</Badge> },
+    { key: 'conn', header: 'Google access', render: (m) => (
+      <div className="flex flex-col gap-0.5">
+        {m.needs_reconnect ? <Badge tone="flamingo">reconnect needed</Badge>
+          : m.connected ? <Badge tone="success">connected</Badge>
+          : <Badge tone="neutral">not connected</Badge>}
+        {m.connected && m.connected_by && <span className="text-xs text-grape-soft">by {m.connected_by}</span>}
+      </div>
+    ) },
     { key: 'on', header: 'Enabled', render: (m) => (
       <input type="checkbox" checked={m.enabled} onChange={(e) => patch.mutate({ id: m.id, body: { enabled: e.target.checked } })} aria-label={`Enable ${m.address}`} />
     ) },
@@ -227,7 +246,17 @@ function Mailboxes({ status }: { status: SyncStatus }) {
     { key: 'n', header: 'Logged', className: 'text-right', render: (m) => m.total_logged },
     { key: 'actions', header: '', className: 'text-right', render: (m) => (
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn-ghost px-2.5 py-1 text-xs" disabled={sync.isPending || !status.configured} onClick={() => sync.mutate(m.id)}>Sync now</button>
+        <button type="button" className="btn-primary px-2.5 py-1 text-xs" disabled={connect.isPending || !status.configured}
+          title={`Sign in to Google as ${m.address} and approve read-only Gmail access`} onClick={() => connect.mutate(m.id)}>
+          {m.connected || m.needs_reconnect ? 'Reconnect' : 'Connect Gmail'}
+        </button>
+        {m.connected && !m.needs_reconnect && (
+          <button type="button" className="btn-ghost px-2.5 py-1 text-xs" disabled={sync.isPending} onClick={() => sync.mutate(m.id)}>Sync now</button>
+        )}
+        {m.connected && (
+          <button type="button" className="btn-ghost px-2.5 py-1 text-xs"
+            onClick={() => { if (confirm(`Disconnect ${m.address}? Google access is revoked; emails already logged stay.`)) disconnect.mutate(m.id); }}>Disconnect</button>
+        )}
         <button type="button" className="btn-ghost px-2.5 py-1 text-xs text-flamingo"
           onClick={() => { if (confirm(`Stop reading ${m.address}? Emails already logged stay.`)) del.mutate(m.id); }}>Remove</button>
       </div>
@@ -238,9 +267,11 @@ function Mailboxes({ status }: { status: SyncStatus }) {
     <section className="flex flex-col gap-3">
       <h2 className="text-lg">Connected mailboxes</h2>
       <p className="text-sm text-grape-soft">
-        Read-only access through Google service account{' '}
-        <span className="text-white">{status.service_account ?? '(not set up)'}</span>. A mailbox only works once the
-        account is authorized for the domain in the Google Admin console.
+        Each mailbox is connected by signing in to Google as that mailbox and approving <span className="text-white">read-only</span>{' '}
+        Gmail access. Only emails that involve a customer contact are saved. Disconnect any time to revoke access.
+      </p>
+      <p className="text-xs text-grape-soft">
+        Redirect URI to register in the Google OAuth client: <code className="select-all text-cyan">{status.redirect_uri}</code>
       </p>
       <DataTable columns={columns} rows={status.mailboxes} rowKey={(m) => m.id}
         empty={<EmptyState title="No mailboxes" hint="Add crm@tensorbay.io below." />} />

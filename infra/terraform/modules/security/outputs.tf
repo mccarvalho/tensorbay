@@ -44,7 +44,12 @@ output "lead_ingest_secret_arn" {
   value       = aws_secretsmanager_secret.lead_ingest.arn
 }
 
-output "gmail_sa_secret_arn" {
-  description = "Secrets Manager ARN holding the Google service-account key for Gmail sync."
-  value       = aws_secretsmanager_secret.gmail_sa.arn
+output "gmail_oauth_secret_arn" {
+  description = "Secrets Manager ARN holding the Google OAuth client for Gmail sync."
+  value       = aws_secretsmanager_secret.gmail_oauth.arn
+}
+
+output "gmail_token_key_secret_arn" {
+  description = "Secrets Manager ARN holding the key that encrypts stored Gmail refresh tokens."
+  value       = aws_secretsmanager_secret.gmail_token_key.arn
 }

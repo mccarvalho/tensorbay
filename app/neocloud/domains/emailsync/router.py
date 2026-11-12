@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,11 +15,13 @@ from neocloud.auth.rbac import Permission
 from neocloud.core.config import Settings, get_settings
 from neocloud.db.session import get_session
 from neocloud.domains.customers.models import Activity, ActivityType, Contact, Customer
-from neocloud.domains.emailsync import service
-from neocloud.domains.emailsync.gmail import GmailReader, load_service_account
+from neocloud.domains.emailsync import oauth, service
+from neocloud.domains.emailsync.gmail import make_reader
 from neocloud.domains.emailsync.models import Mailbox, UnmatchedEmail, UnmatchedStatus
 from neocloud.domains.emailsync.schemas import (
     MailboxCreate,
+    ConnectComplete,
+    ConnectStart,
     MailboxRead,
     MailboxUpdate,
     SyncRunResult,
@@ -42,7 +45,6 @@ Writer = Annotated[CurrentUser, Depends(require_permission(Permission.CUSTOMER_W
 async def sync_status(
     session: Session, _user: Reader, settings: Annotated[Settings, Depends(get_settings)]
 ):
-    info = load_service_account(settings)
     boxes = (await session.execute(select(Mailbox).order_by(Mailbox.address))).scalars().all()
     pending = (
         await session.execute(
@@ -52,8 +54,8 @@ async def sync_status(
         )
     ).scalar_one()
     return SyncStatus(
-        configured=info is not None,
-        service_account=info.get("client_email") if info else None,
+        configured=oauth.is_configured(settings),
+        redirect_uri=oauth.redirect_uri(settings),
         mailboxes=list(boxes),
         pending_unmatched=pending,
     )
@@ -120,14 +122,109 @@ async def sync_now(
     mb = await session.get(Mailbox, mailbox_id)
     if mb is None:
         raise HTTPException(status_code=404, detail="Mailbox not found")
-    info = load_service_account(settings)
-    if info is None:
-        raise HTTPException(status_code=409, detail="Gmail service account is not configured")
-    res = await service.sync_mailbox(session, GmailReader(info, mb.address), mb, settings)
+    if not oauth.is_configured(settings):
+        raise HTTPException(status_code=409, detail="Google OAuth is not configured yet")
+    reader = make_reader(settings, mb)
+    if reader is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Mailbox is not connected. Use Connect Gmail first."
+            if not mb.connected
+            else "Google access was revoked. Reconnect this mailbox.",
+        )
+    res = await service.sync_mailbox(session, reader, mb, settings)
     return SyncRunResult(
         mailbox=mb.address, logged=res.logged, unmatched=res.unmatched,
         skipped=res.skipped, error=mb.last_error,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Connect / disconnect a mailbox (Google OAuth)
+# --------------------------------------------------------------------------- #
+@router.post("/mailboxes/{mailbox_id}/connect", response_model=ConnectStart)
+async def start_connect(
+    mailbox_id: str,
+    session: Session,
+    user: Admin,
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """Begin connecting a mailbox: returns the Google consent URL to send the
+    browser to. The person signing in must be the mailbox owner."""
+    mb = await session.get(Mailbox, mailbox_id)
+    if mb is None:
+        raise HTTPException(status_code=404, detail="Mailbox not found")
+    if not oauth.is_configured(settings):
+        raise HTTPException(status_code=409, detail="Google OAuth is not configured yet")
+    state = oauth.make_state(settings, mb.id, user.subject)
+    return ConnectStart(authorization_url=oauth.authorization_url(settings, mb.address, state))
+
+
+@router.post("/oauth/callback", response_model=MailboxRead)
+async def finish_connect(
+    payload: ConnectComplete,
+    session: Session,
+    user: Admin,
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    """Called by the frontend after Google redirects back with ``code`` + ``state``."""
+    try:
+        mailbox_id = oauth.parse_state(settings, payload.state, user.subject)
+        mb = await session.get(Mailbox, mailbox_id)
+        if mb is None:
+            raise oauth.OAuthError("That mailbox no longer exists.")
+        result = await oauth.exchange_code(settings, payload.code)
+        if result.email != mb.address.lower():
+            # Revoke what we were just handed: it belongs to the wrong account.
+            await oauth.revoke_token(result.refresh_token)
+            raise oauth.OAuthError(
+                f"You signed in as {result.email}, but this mailbox is {mb.address}. "
+                "Sign in with the mailbox's own Google account."
+            )
+        mb.refresh_token_enc = oauth.encrypt_token(settings, result.refresh_token)
+    except oauth.OAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    mb.connected_at = datetime.now(timezone.utc)
+    mb.connected_by = user.email or user.subject
+    mb.needs_reconnect = False
+    mb.last_error = None
+    mb.history_id = None  # fresh grant: start with a clean lookback
+    mb.updated_by = user.subject
+    await session.flush()
+    await record_audit(
+        session, action="connect", entity_type="mailbox", entity_id=mb.id,
+        actor=user.subject, new_value={"address": mb.address},
+    )
+    await session.refresh(mb)
+    return mb
+
+
+@router.post("/mailboxes/{mailbox_id}/disconnect", response_model=MailboxRead)
+async def disconnect(
+    mailbox_id: str,
+    session: Session,
+    user: Admin,
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    mb = await session.get(Mailbox, mailbox_id)
+    if mb is None:
+        raise HTTPException(status_code=404, detail="Mailbox not found")
+    if mb.refresh_token_enc:
+        token = oauth.decrypt_token(settings, mb.refresh_token_enc)
+        if token:
+            await oauth.revoke_token(token)
+    mb.refresh_token_enc = None
+    mb.connected_at = None
+    mb.connected_by = None
+    mb.needs_reconnect = False
+    mb.history_id = None
+    mb.updated_by = user.subject
+    await session.flush()
+    await record_audit(
+        session, action="disconnect", entity_type="mailbox", entity_id=mb.id, actor=user.subject
+    )
+    await session.refresh(mb)
+    return mb
 
 
 # --------------------------------------------------------------------------- #

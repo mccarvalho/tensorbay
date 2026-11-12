@@ -68,21 +68,46 @@ resource "aws_secretsmanager_secret_version" "lead_ingest" {
   }
 }
 
-# Google service-account key (JSON) used to read Gmail with domain-wide
-# delegation (customer email -> activity timeline). Created empty: the real key is
-# stored out-of-band with `aws secretsmanager put-secret-value`, never in Terraform
-# state, and ignore_changes keeps Terraform from reverting it. While it is "{}" the
-# email sync simply idles.
-resource "aws_secretsmanager_secret" "gmail_sa" {
-  name        = "${var.name_prefix}/gmail/service-account"
-  description = "Google service-account key for Gmail sync (${var.name_prefix})"
+# Gmail sync (customer email -> activity timeline) connects mailboxes through
+# Google OAuth, with no service-account key.
+#
+# 1) OAuth web client {"client_id","client_secret"}. Created empty; the values are
+#    stored out-of-band with `aws secretsmanager put-secret-value` so they never
+#    reach Terraform state, and ignore_changes stops Terraform reverting them.
+#    While it is "{}" the email sync simply idles.
+resource "aws_secretsmanager_secret" "gmail_oauth" {
+  name        = "${var.name_prefix}/gmail/oauth-client"
+  description = "Google OAuth web client for Gmail sync (${var.name_prefix})"
   kms_key_id  = aws_kms_key.secrets.arn
   tags        = var.tags
 }
 
-resource "aws_secretsmanager_secret_version" "gmail_sa" {
-  secret_id     = aws_secretsmanager_secret.gmail_sa.id
+resource "aws_secretsmanager_secret_version" "gmail_oauth" {
+  secret_id     = aws_secretsmanager_secret.gmail_oauth.id
   secret_string = "{}"
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# 2) Fernet key that encrypts the stored per-mailbox refresh tokens. Generated
+#    once (256 random bits, url-safe base64) and never rotated by Terraform:
+#    replacing it would make every stored token unreadable.
+resource "random_id" "gmail_token_key" {
+  byte_length = 32
+}
+
+resource "aws_secretsmanager_secret" "gmail_token_key" {
+  name        = "${var.name_prefix}/gmail/token-key"
+  description = "Encryption key for stored Gmail refresh tokens (${var.name_prefix})"
+  kms_key_id  = aws_kms_key.secrets.arn
+  tags        = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "gmail_token_key" {
+  secret_id     = aws_secretsmanager_secret.gmail_token_key.id
+  secret_string = jsonencode({ key = random_id.gmail_token_key.b64_url })
 
   lifecycle {
     ignore_changes = [secret_string]

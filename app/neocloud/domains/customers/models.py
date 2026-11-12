@@ -52,6 +52,7 @@ class ActivityType(StrEnum):
     MEETING = "MEETING"
     NOTE = "NOTE"
     DEMO = "DEMO"
+    SLACK = "SLACK"
     OTHER = "OTHER"
 
 
@@ -94,6 +95,8 @@ class Contact(Base, UUIDMixin, AuditMixin):
     )
     type: Mapped[ContactType] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Job title / role at the customer (e.g. "CTO", "Head of Procurement").
+    role: Mapped[str | None] = mapped_column(String(128))
     email: Mapped[str | None] = mapped_column(String(320))
     phone: Mapped[str | None] = mapped_column(String(64))
 

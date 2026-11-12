@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from neocloud.domains.customers.models import (
     ActivityType,
@@ -66,6 +66,7 @@ class CustomerResponse(CustomerBase):
 class ContactBase(BaseModel):
     type: ContactType
     name: str
+    role: str | None = Field(default=None, max_length=128)
     email: EmailStr | None = None
     phone: str | None = None
 
@@ -77,6 +78,7 @@ class ContactCreate(ContactBase):
 class ContactUpdate(BaseModel):
     type: ContactType | None = None
     name: str | None = None
+    role: str | None = Field(default=None, max_length=128)
     email: EmailStr | None = None
     phone: str | None = None
 

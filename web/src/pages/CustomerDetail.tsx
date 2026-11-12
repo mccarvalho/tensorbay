@@ -3,6 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import { hasPermission } from '../permissions';
+import { useToast, errMessage } from '../components/toast';
 import {
   SectionHeader,
   Spinner,
@@ -17,10 +19,10 @@ import {
 
 // --------------------------------------------------------------------------- //
 type ContactType = 'COMMERCIAL' | 'TECHNICAL' | 'FINANCE' | 'BILLING' | 'EXECUTIVE';
-type ActivityType = 'CALL' | 'EMAIL' | 'MEETING' | 'NOTE' | 'DEMO' | 'OTHER';
+type ActivityType = 'CALL' | 'EMAIL' | 'MEETING' | 'NOTE' | 'DEMO' | 'SLACK' | 'OTHER';
 
 const CONTACT_TYPES: ContactType[] = ['COMMERCIAL', 'TECHNICAL', 'FINANCE', 'BILLING', 'EXECUTIVE'];
-const ACTIVITY_TYPES: ActivityType[] = ['CALL', 'EMAIL', 'MEETING', 'NOTE', 'DEMO', 'OTHER'];
+const ACTIVITY_TYPES: ActivityType[] = ['CALL', 'EMAIL', 'MEETING', 'NOTE', 'DEMO', 'SLACK', 'OTHER'];
 
 interface Customer {
   id: string;
@@ -39,6 +41,7 @@ interface Contact {
   customer_id: string;
   type: ContactType;
   name: string;
+  role: string | null;
   email: string | null;
   phone: string | null;
 }
@@ -70,17 +73,25 @@ const ACTIVITY_TONE: Record<ActivityType, BadgeTone> = {
   MEETING: 'success',
   NOTE: 'neutral',
   DEMO: 'flamingo',
+  SLACK: 'cyan',
   OTHER: 'neutral',
 };
 
 const ACTIVITY_ICON: Record<ActivityType, string> = {
-  CALL: '📞', EMAIL: '✉️', MEETING: '🤝', NOTE: '📝', DEMO: '🖥️', OTHER: '•',
+  CALL: '📞', EMAIL: '✉️', MEETING: '🤝', NOTE: '📝', DEMO: '🖥️', SLACK: '💬', OTHER: '•',
 };
 
 const fmtDateTime = (s: string): string =>
   new Date(s).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 const fmtDate = (s: string): string =>
   new Date(s + 'T00:00:00').toLocaleDateString('en-US', { dateStyle: 'medium' });
+// <input type="datetime-local"> works in local time without a zone.
+const toLocalInput = (iso: string): string => {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const nowLocalInput = (): string => toLocalInput(new Date().toISOString());
 const isOverdue = (d: string): boolean => new Date(d + 'T00:00:00') < new Date(new Date().toDateString());
 
 // --------------------------------------------------------------------------- //
@@ -104,8 +115,25 @@ export default function CustomerDetail() {
     enabled: !!id,
   });
 
-  const [contactModal, setContactModal] = useState(false);
-  const [activityModal, setActivityModal] = useState(false);
+  const canWrite = hasPermission('customer.write');
+  const toast = useToast();
+  // `true` = creating, a record = editing it, `null` = closed.
+  const [contactModal, setContactModal] = useState<Contact | true | null>(null);
+  const [activityModal, setActivityModal] = useState<Activity | true | null>(null);
+  const delContact = useMutation({
+    mutationFn: (cid: string) => api.del<void>(`/v1/customers/${id}/contacts/${cid}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contacts', id] });
+      qc.invalidateQueries({ queryKey: ['activities', id] });
+      toast.success('Contact deleted');
+    },
+    onError: (e) => toast.error(errMessage(e, 'Could not delete contact')),
+  });
+  const delActivity = useMutation({
+    mutationFn: (aid: string) => api.del<void>(`/v1/customers/${id}/activities/${aid}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['activities', id] }); toast.success('Activity deleted'); },
+    onError: (e) => toast.error(errMessage(e, 'Could not delete activity')),
+  });
 
   if (customerQuery.isLoading) return <Spinner label="Loading customer…" />;
   if (customerQuery.isError) return <ErrorState error={customerQuery.error} />;
@@ -153,7 +181,7 @@ export default function CustomerDetail() {
         <section className="lg:col-span-2 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg">Contacts</h2>
-            <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setContactModal(true)}>+ Add</button>
+            {canWrite && <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setContactModal(true)}>+ Add</button>}
           </div>
           {contactsQuery.isLoading ? (
             <Spinner />
@@ -163,13 +191,23 @@ export default function CustomerDetail() {
             <div className="flex flex-col gap-2">
               {contacts.map((c) => (
                 <div key={c.id} className="card flex items-start justify-between gap-3 py-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="font-medium text-white">{c.name}</div>
+                    {c.role && <div className="text-sm text-cyan">{c.role}</div>}
                     <div className="text-xs text-grape-soft">
                       {c.email ?? '—'}{c.phone ? ` · ${c.phone}` : ''}
                     </div>
                   </div>
-                  <Badge tone={CONTACT_TONE[c.type]}>{c.type}</Badge>
+                  <div className="flex flex-col items-end gap-2">
+                    <Badge tone={CONTACT_TONE[c.type]}>{c.type}</Badge>
+                    {canWrite && (
+                      <div className="flex gap-1">
+                        <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => setContactModal(c)}>Edit</button>
+                        <button type="button" className="btn-ghost px-2 py-0.5 text-xs text-flamingo" disabled={delContact.isPending}
+                          onClick={() => { if (confirm(`Delete contact ${c.name}? Their logged activities are kept.`)) delContact.mutate(c.id); }}>Delete</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -180,7 +218,7 @@ export default function CustomerDetail() {
         <section className="lg:col-span-3 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg">Activity Timeline</h2>
-            <button type="button" className="btn-primary px-3 py-1.5 text-sm" onClick={() => setActivityModal(true)}>+ Log Activity</button>
+            {canWrite && <button type="button" className="btn-primary px-3 py-1.5 text-sm" onClick={() => setActivityModal(true)}>+ Log Activity</button>}
           </div>
           {activitiesQuery.isLoading ? (
             <Spinner />
@@ -194,7 +232,16 @@ export default function CustomerDetail() {
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-semibold text-white">{a.subject}</span>
-                      <Badge tone={ACTIVITY_TONE[a.type]}>{a.type}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge tone={ACTIVITY_TONE[a.type]}>{a.type}</Badge>
+                        {canWrite && (
+                          <>
+                            <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => setActivityModal(a)}>Edit</button>
+                            <button type="button" className="btn-ghost px-2 py-0.5 text-xs text-flamingo" disabled={delActivity.isPending}
+                              onClick={() => { if (confirm(`Delete activity "${a.subject}"?`)) delActivity.mutate(a.id); }}>Delete</button>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <div className="text-xs text-grape-soft">{fmtDateTime(a.occurred_at)}</div>
                     {a.notes && <p className="mt-1 text-sm text-grape-soft">{a.notes}</p>}
@@ -217,16 +264,18 @@ export default function CustomerDetail() {
       {contactModal && (
         <ContactModal
           customerId={id}
-          onClose={() => setContactModal(false)}
-          onSaved={() => { qc.invalidateQueries({ queryKey: ['contacts', id] }); setContactModal(false); }}
+          contact={contactModal === true ? null : contactModal}
+          onClose={() => setContactModal(null)}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ['contacts', id] }); setContactModal(null); }}
         />
       )}
       {activityModal && (
         <ActivityModal
           customerId={id}
           contacts={contacts}
-          onClose={() => setActivityModal(false)}
-          onSaved={() => { qc.invalidateQueries({ queryKey: ['activities', id] }); setActivityModal(false); }}
+          activity={activityModal === true ? null : activityModal}
+          onClose={() => setActivityModal(null)}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ['activities', id] }); setActivityModal(null); }}
         />
       )}
     </div>
@@ -234,24 +283,32 @@ export default function CustomerDetail() {
 }
 
 // --------------------------------------------------------------------------- //
-function ContactModal({ customerId, onClose, onSaved }: { customerId: string; onClose: () => void; onSaved: () => void }) {
-  const [type, setType] = useState<ContactType>('COMMERCIAL');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+function ContactModal({
+  customerId, contact, onClose, onSaved,
+}: { customerId: string; contact: Contact | null; onClose: () => void; onSaved: () => void }) {
+  const [type, setType] = useState<ContactType>(contact?.type ?? 'COMMERCIAL');
+  const [name, setName] = useState(contact?.name ?? '');
+  const [role, setRole] = useState(contact?.role ?? '');
+  const [email, setEmail] = useState(contact?.email ?? '');
+  const [phone, setPhone] = useState(contact?.phone ?? '');
 
   const mut = useMutation({
-    mutationFn: () =>
-      api.post<Contact>(`/v1/customers/${customerId}/contacts`, {
-        type, name, email: email || null, phone: phone || null,
-      }),
+    mutationFn: () => {
+      const body = {
+        type, name: name.trim(), role: role.trim() || null,
+        email: email.trim() || null, phone: phone.trim() || null,
+      };
+      return contact
+        ? api.patch<Contact>(`/v1/customers/${customerId}/contacts/${contact.id}`, body)
+        : api.post<Contact>(`/v1/customers/${customerId}/contacts`, body);
+    },
     onSuccess: onSaved,
   });
 
   function submit(e: FormEvent) { e.preventDefault(); mut.mutate(); }
 
   return (
-    <Modal open onClose={onClose} title="Add Contact">
+    <Modal open onClose={onClose} title={contact ? 'Edit Contact' : 'Add Contact'}>
       <form className="flex flex-col gap-4" onSubmit={submit}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -265,13 +322,18 @@ function ContactModal({ customerId, onClose, onSaved }: { customerId: string; on
             <input id="c_name" className="input" required value={name} onChange={(e) => setName(e.target.value)} />
           </div>
         </div>
+        <div>
+          <label className="label" htmlFor="c_role">Role</label>
+          <input id="c_role" className="input" maxLength={128} placeholder="e.g. CTO, Head of Procurement, Founder"
+            value={role} onChange={(e) => setRole(e.target.value)} />
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="c_email">Email</label>
             <input id="c_email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="c_phone">Phone</label>
+            <label className="label" htmlFor="c_phone">Phone (optional)</label>
             <input id="c_phone" className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
         </div>
@@ -279,7 +341,7 @@ function ContactModal({ customerId, onClose, onSaved }: { customerId: string; on
         <div className="mt-2 flex justify-end gap-3">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary" disabled={mut.isPending}>
-            {mut.isPending ? 'Saving…' : 'Add Contact'}
+            {mut.isPending ? 'Saving…' : contact ? 'Save' : 'Add Contact'}
           </button>
         </div>
       </form>
@@ -289,32 +351,39 @@ function ContactModal({ customerId, onClose, onSaved }: { customerId: string; on
 
 // --------------------------------------------------------------------------- //
 function ActivityModal({
-  customerId, contacts, onClose, onSaved,
-}: { customerId: string; contacts: Contact[]; onClose: () => void; onSaved: () => void }) {
-  const [type, setType] = useState<ActivityType>('CALL');
-  const [subject, setSubject] = useState('');
-  const [notes, setNotes] = useState('');
-  const [outcome, setOutcome] = useState('');
-  const [contactId, setContactId] = useState('');
-  const [followUp, setFollowUp] = useState('');
+  customerId, contacts, activity, onClose, onSaved,
+}: { customerId: string; contacts: Contact[]; activity: Activity | null; onClose: () => void; onSaved: () => void }) {
+  const [type, setType] = useState<ActivityType>(activity?.type ?? 'CALL');
+  const [subject, setSubject] = useState(activity?.subject ?? '');
+  const [notes, setNotes] = useState(activity?.notes ?? '');
+  const [outcome, setOutcome] = useState(activity?.outcome ?? '');
+  const [contactId, setContactId] = useState(activity?.contact_id ?? '');
+  const [followUp, setFollowUp] = useState(activity?.next_follow_up_date ?? '');
+  // When it actually happened (defaults to now) so past activity can be logged retroactively.
+  const [when, setWhen] = useState(activity ? toLocalInput(activity.occurred_at) : nowLocalInput());
 
   const mut = useMutation({
-    mutationFn: () =>
-      api.post<Activity>(`/v1/customers/${customerId}/activities`, {
+    mutationFn: () => {
+      const body = {
         type,
-        subject,
+        subject: subject.trim(),
         notes: notes || null,
         outcome: outcome || null,
         contact_id: contactId || null,
         next_follow_up_date: followUp || null,
-      }),
+        occurred_at: when ? new Date(when).toISOString() : null,
+      };
+      return activity
+        ? api.patch<Activity>(`/v1/customers/${customerId}/activities/${activity.id}`, body)
+        : api.post<Activity>(`/v1/customers/${customerId}/activities`, body);
+    },
     onSuccess: onSaved,
   });
 
   function submit(e: FormEvent) { e.preventDefault(); mut.mutate(); }
 
   return (
-    <Modal open onClose={onClose} title="Log Activity">
+    <Modal open onClose={onClose} title={activity ? 'Edit Activity' : 'Log Activity'}>
       <form className="flex flex-col gap-4" onSubmit={submit}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -327,9 +396,14 @@ function ActivityModal({
             <label className="label" htmlFor="a_contact">Contact (optional)</label>
             <select id="a_contact" className="input" value={contactId} onChange={(e) => setContactId(e.target.value)}>
               <option value="">— none —</option>
-              {contacts.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.type})</option>)}
+              {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''} ({c.type})</option>)}
             </select>
           </div>
+        </div>
+        <div>
+          <label className="label" htmlFor="a_when">When it happened</label>
+          <input id="a_when" type="datetime-local" className="input" required max={nowLocalInput()}
+            value={when} onChange={(e) => setWhen(e.target.value)} />
         </div>
         <div>
           <label className="label" htmlFor="a_subject">Subject</label>
@@ -355,7 +429,7 @@ function ActivityModal({
         <div className="mt-2 flex justify-end gap-3">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary" disabled={mut.isPending}>
-            {mut.isPending ? 'Saving…' : 'Log Activity'}
+            {mut.isPending ? 'Saving…' : activity ? 'Save' : 'Log Activity'}
           </button>
         </div>
       </form>

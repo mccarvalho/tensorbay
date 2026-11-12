@@ -222,10 +222,25 @@ module "cicd" {
 # Frontend hosting (S3 + CloudFront)
 ########################################
 
+module "edge_domain" {
+  source = "./modules/edge_domain"
+  providers = {
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  domain_name = var.custom_domain
+  attach      = var.custom_domain_attach
+  tags        = local.common_tags
+}
+
 module "frontend" {
   source = "./modules/frontend"
 
   name_prefix       = local.name_prefix
   api_origin_domain = module.compute.alb_dns_name
   tags              = local.common_tags
+
+  # Only set once the certificate is validated (custom_domain_attach = true).
+  aliases             = var.custom_domain_attach && var.custom_domain != "" ? [var.custom_domain] : []
+  acm_certificate_arn = module.edge_domain.certificate_arn
 }

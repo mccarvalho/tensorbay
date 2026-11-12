@@ -64,3 +64,8 @@ ses_notification_email = "mcarvalho@tensorbay.io"
 
 economics_alert_emails = "mcarvalho@tensorbay.io"
 lead_alert_emails      = "mcarvalho@tensorbay.io"
+
+# Custom domain (DNS in Cloudflare, CNAME -> CloudFront). Phase 1 requests the ACM
+# certificate; set custom_domain_attach = true once it is ISSUED to attach it.
+custom_domain        = "dev.crm.tensorbay.io"
+custom_domain_attach = false

@@ -270,3 +270,15 @@ variable "lead_alert_emails" {
   type        = string
   default     = ""
 }
+
+variable "custom_domain" {
+  description = "Public domain for the portal (e.g. crm.tensorbay.io). Empty = use the cloudfront.net URL only."
+  type        = string
+  default     = ""
+}
+
+variable "custom_domain_attach" {
+  description = "Second phase: once the ACM certificate is ISSUED (DNS validation done), attach it to CloudFront."
+  type        = bool
+  default     = false
+}

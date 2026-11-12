@@ -12,6 +12,7 @@ resource "aws_cloudfront_distribution" "site" {
   enabled             = true
   default_root_object = "index.html"
   comment             = "${var.name_prefix} NeoCloud web"
+  aliases             = var.aliases
   price_class         = "PriceClass_100" # NA + EU edge locations
   tags                = var.tags
 
@@ -76,6 +77,9 @@ resource "aws_cloudfront_distribution" "site" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = var.acm_certificate_arn == ""
+    acm_certificate_arn            = var.acm_certificate_arn == "" ? null : var.acm_certificate_arn
+    ssl_support_method             = var.acm_certificate_arn == "" ? null : "sni-only"
+    minimum_protocol_version       = var.acm_certificate_arn == "" ? null : "TLSv1.2_2021"
   }
 }

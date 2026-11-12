@@ -150,3 +150,12 @@ output "frontend_distribution_id" {
   description = "CloudFront distribution ID for cache invalidation."
   value       = module.frontend.distribution_id
 }
+
+output "custom_domain_validation_records" {
+  description = "Create these DNS records in Cloudflare (DNS only) to validate the ACM certificate."
+  value       = module.edge_domain.validation_records
+}
+
+output "custom_domain_certificate_status" {
+  value = module.edge_domain.certificate_status
+}

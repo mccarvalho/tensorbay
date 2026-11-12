@@ -43,3 +43,8 @@ output "lead_ingest_secret_arn" {
   description = "Secrets Manager ARN holding the website lead-ingest bearer token."
   value       = aws_secretsmanager_secret.lead_ingest.arn
 }
+
+output "gmail_sa_secret_arn" {
+  description = "Secrets Manager ARN holding the Google service-account key for Gmail sync."
+  value       = aws_secretsmanager_secret.gmail_sa.arn
+}

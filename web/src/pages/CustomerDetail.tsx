@@ -57,6 +57,8 @@ interface Activity {
   occurred_at: string;
   next_follow_up_date: string | null;
   created_by: string | null;
+  source: string | null;
+  direction: 'IN' | 'OUT' | null;
 }
 
 const CONTACT_TONE: Record<ContactType, BadgeTone> = {
@@ -233,7 +235,8 @@ export default function CustomerDetail() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-semibold text-white">{a.subject}</span>
                       <div className="flex items-center gap-2">
-                        <Badge tone={ACTIVITY_TONE[a.type]}>{a.type}</Badge>
+                        {a.direction && <Badge tone={a.direction === 'IN' ? 'cyan' : 'grape'}>{a.direction === 'IN' ? 'Received' : 'Sent'}</Badge>}
+                        <Badge tone={ACTIVITY_TONE[a.type]}>{a.source === 'gmail' ? 'EMAIL · Gmail' : a.type}</Badge>
                         {canWrite && (
                           <>
                             <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => setActivityModal(a)}>Edit</button>
@@ -244,7 +247,14 @@ export default function CustomerDetail() {
                       </div>
                     </div>
                     <div className="text-xs text-grape-soft">{fmtDateTime(a.occurred_at)}</div>
-                    {a.notes && <p className="mt-1 text-sm text-grape-soft">{a.notes}</p>}
+                    {a.notes && (a.source === 'gmail' && a.notes.length > 240 ? (
+                      <details className="mt-1 text-sm text-grape-soft">
+                        <summary className="cursor-pointer">{a.notes.slice(0, 200).replace(/\s+/g, ' ')}… <span className="text-cyan">show full email</span></summary>
+                        <p className="mt-2 whitespace-pre-wrap">{a.notes}</p>
+                      </details>
+                    ) : (
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-grape-soft">{a.notes}</p>
+                    ))}
                     {a.outcome && <p className="mt-1 text-sm text-white"><span className="text-grape-soft">Outcome:</span> {a.outcome}</p>}
                     {a.next_follow_up_date && (
                       <p className={`mt-1 text-xs ${isOverdue(a.next_follow_up_date) ? 'text-flamingo' : 'text-cyan'}`}>

@@ -71,6 +71,15 @@ class Settings(BaseSettings):
     # Comma-separated extra recipients notified of every new lead, in addition to
     # the Account Manager the lead is assigned to.
     lead_alert_emails: str = ""
+    # --- Gmail sync (customer email -> activity timeline) ---
+    # Secrets Manager secret holding the Google service-account JSON key (domain-
+    # wide delegation, gmail.readonly). Empty / "{}" = not configured: sync idles.
+    gmail_sa_secret_arn: str | None = None
+    gmail_sa_json: str | None = None  # tests / local override
+    email_sync_enabled: bool = False
+    email_sync_interval_seconds: int = 120
+    # Comma-separated company domains: addresses on these never count as customers.
+    internal_email_domains: str = "tensorbay.io"
 
     @property
     def cognito_issuer(self) -> str | None:

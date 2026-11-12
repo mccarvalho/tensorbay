@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -123,6 +124,15 @@ class Activity(Base, UUIDMixin, AuditMixin):
     )
     next_follow_up_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, index=True
+    )
+    # Set for activities captured automatically (e.g. source="gmail"). The
+    # external_id (the email's Message-ID) makes capture idempotent per customer.
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    direction: Mapped[str | None] = mapped_column(String(8), nullable=True)  # IN / OUT
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("customer_id", "external_id", name="uq_activity_customer_external"),
     )
 
     customer: Mapped["Customer"] = relationship(back_populates="activities")

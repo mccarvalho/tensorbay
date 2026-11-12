@@ -67,3 +67,24 @@ resource "aws_secretsmanager_secret_version" "lead_ingest" {
     ignore_changes = [secret_string]
   }
 }
+
+# Google service-account key (JSON) used to read Gmail with domain-wide
+# delegation (customer email -> activity timeline). Created empty: the real key is
+# stored out-of-band with `aws secretsmanager put-secret-value`, never in Terraform
+# state, and ignore_changes keeps Terraform from reverting it. While it is "{}" the
+# email sync simply idles.
+resource "aws_secretsmanager_secret" "gmail_sa" {
+  name        = "${var.name_prefix}/gmail/service-account"
+  description = "Google service-account key for Gmail sync (${var.name_prefix})"
+  kms_key_id  = aws_kms_key.secrets.arn
+  tags        = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "gmail_sa" {
+  secret_id     = aws_secretsmanager_secret.gmail_sa.id
+  secret_string = "{}"
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}

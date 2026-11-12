@@ -26,3 +26,8 @@ structlog==24.4.0
 pytest==8.3.4
 pytest-asyncio==0.25.0
 aiosqlite==0.20.0
+
+# Gmail sync (service account + domain-wide delegation)
+google-auth==2.62.2
+google-api-python-client==2.202.0
+requests==2.34.2

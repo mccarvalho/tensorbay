@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/customers', label: 'Customers' },
   { to: '/leads', label: 'Leads', perm: 'lead.read' },
+  { to: '/email', label: 'Email', perm: 'customer.write' },
   { to: '/sales', label: 'Sales Pipeline' },
   { to: '/catalog', label: 'Catalog & Pricing' },
   { to: '/contracts', label: 'Contracts' },

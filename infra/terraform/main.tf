@@ -72,7 +72,8 @@ module "compute" {
   secret_arns = [
     module.security.aurora_secret_arn,
     module.security.google_oidc_secret_arn,
-    module.security.lead_ingest_secret_arn
+    module.security.lead_ingest_secret_arn,
+    module.security.gmail_sa_secret_arn
   ]
   secrets_kms_key_arn = module.security.kms_secrets_key_arn
 
@@ -97,6 +98,9 @@ module "compute" {
     ECONOMICS_ALERT_EMAILS = var.economics_alert_emails
     LEAD_INGEST_SECRET_ARN = module.security.lead_ingest_secret_arn
     LEAD_ALERT_EMAILS      = var.lead_alert_emails
+    GMAIL_SA_SECRET_ARN    = module.security.gmail_sa_secret_arn
+    EMAIL_SYNC_ENABLED     = "true"
+    INTERNAL_EMAIL_DOMAINS = "tensorbay.io"
   }
 
   tags = local.common_tags

@@ -9,6 +9,7 @@ import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
 import Sales from './pages/Sales';
 import Leads from './pages/Leads';
+import EmailSync from './pages/EmailSync';
 import Catalog from './pages/Catalog';
 import Contracts from './pages/Contracts';
 import ContractDetail from './pages/ContractDetail';
@@ -41,6 +42,7 @@ export default function App(): ReactElement {
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="leads" element={<Leads />} />
+        <Route path="email" element={<EmailSync />} />
         <Route path="sales" element={<Sales />} />
         <Route path="opportunities/:id" element={<OpportunityDetail />} />
         <Route path="catalog" element={<Catalog />} />

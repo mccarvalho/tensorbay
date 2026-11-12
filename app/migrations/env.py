@@ -24,6 +24,7 @@ from neocloud.domains.reservations import models as _reservations  # noqa: F401
 from neocloud.domains.documents import models as _documents  # noqa: F401
 from neocloud.domains.economics import models as _economics  # noqa: F401
 from neocloud.domains.leads import models as _leads  # noqa: F401
+from neocloud.domains.emailsync import models as _emailsync  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

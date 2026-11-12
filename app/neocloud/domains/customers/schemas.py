@@ -130,6 +130,8 @@ class ActivityResponse(ActivityBase):
     created_at: datetime
     updated_at: datetime
     created_by: str | None = None
+    source: str | None = None
+    direction: str | None = None
 
 
 # --------------------------------------------------------------------------- #

@@ -22,6 +22,22 @@ def create_app() -> FastAPI:
 
     app.add_middleware(CorrelationIdMiddleware)
 
+    if settings.email_sync_enabled:
+        import asyncio
+        from contextlib import asynccontextmanager
+
+        from neocloud.domains.emailsync.service import run_forever
+
+        @asynccontextmanager
+        async def lifespan(_app: FastAPI):
+            task = asyncio.create_task(run_forever(settings))
+            try:
+                yield
+            finally:
+                task.cancel()
+
+        app.router.lifespan_context = lifespan
+
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
         return {"status": "ok", "env": settings.app_env}
@@ -43,6 +59,7 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
     from neocloud.domains.directory.router import router as directory_router
     from neocloud.domains.documents.router import router as documents_router
     from neocloud.domains.economics.router import router as economics_router
+    from neocloud.domains.emailsync.router import router as emailsync_router
     from neocloud.domains.inventory.router import router as inventory_router
     from neocloud.domains.leads.router import router as leads_router
     from neocloud.domains.reservations.router import router as reservations_router
@@ -63,6 +80,7 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
         directory_router,
         economics_router,
         leads_router,
+        emailsync_router,
         admin_router,
     ):
         app.include_router(r, prefix=prefix)

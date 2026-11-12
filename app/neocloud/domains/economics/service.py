@@ -14,6 +14,7 @@ from decimal import Decimal
 import boto3
 
 from neocloud.core.config import Settings
+from neocloud.core.mail import ses_source
 from neocloud.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -90,7 +91,7 @@ def send_margin_warning_email(
     try:
         ses = boto3.client("ses", region_name=settings.aws_region)
         send_kwargs: dict = {
-            "Source": settings.ses_from_email,
+            "Source": ses_source(settings),
             "Destination": {"ToAddresses": recipients},
             "Message": {
                 "Subject": {"Data": subject, "Charset": "UTF-8"},

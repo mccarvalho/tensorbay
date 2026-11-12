@@ -10,6 +10,7 @@ import boto3
 from fastapi import HTTPException, status
 
 from neocloud.core.config import Settings
+from neocloud.core.mail import ses_source
 from neocloud.core.logging import get_logger
 from neocloud.domains.admin.schemas import AdminUser
 
@@ -175,7 +176,7 @@ class AdminService:
         )
         try:
             send_kwargs: dict = {
-                "Source": self._settings.ses_from_email,
+                "Source": ses_source(self._settings),
                 "Destination": {"ToAddresses": [email]},
                 "Message": {
                     "Subject": {"Data": subject, "Charset": "UTF-8"},

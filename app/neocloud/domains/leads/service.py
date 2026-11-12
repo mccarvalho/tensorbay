@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from neocloud.core.config import Settings
+from neocloud.core.mail import ses_source
 from neocloud.core.logging import get_logger
 from neocloud.domains.economics.models import RepStatus, RepType, SalesRep
 from neocloud.domains.leads.models import OPEN_STATUSES, Lead
@@ -334,7 +335,7 @@ def send_new_lead_email(settings: Settings, notice: LeadNotice, recipients: list
     try:
         ses = boto3.client("ses", region_name=settings.aws_region)
         kwargs: dict = {
-            "Source": settings.ses_from_email,
+            "Source": ses_source(settings),
             "Destination": {"ToAddresses": recipients},
             "Message": {
                 "Subject": {"Data": subject, "Charset": "UTF-8"},

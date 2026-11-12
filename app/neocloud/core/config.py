@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     # Verified SES sender identity. When unset, invite emails fall back to the
     # Cognito native invitation (with a temporary password).
     ses_from_email: str | None = None
+    # Display name shown in front of the sender address ("TensorBay <crm@...>").
+    ses_from_name: str = "TensorBay"
     # Public base URL of the frontend, used for the "Sign in with Google" link
     # in invite emails. Falls back to a dev default.
     app_base_url: str = "https://d22xy9yyfwju3n.cloudfront.net"

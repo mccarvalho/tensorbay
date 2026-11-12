@@ -29,8 +29,9 @@ env:
   VITE_ENVIRONMENT: prod
   VITE_COGNITO_DOMAIN: ${{ vars.PROD_COGNITO_DOMAIN }}
   VITE_COGNITO_CLIENT_ID: ${{ vars.PROD_COGNITO_CLIENT_ID }}
-  VITE_COGNITO_REDIRECT_URI: ${{ vars.PROD_REDIRECT_URI }}
-  VITE_COGNITO_LOGOUT_URI: ${{ vars.PROD_LOGOUT_URI }}
+  # Redirect/logout URIs are not set: the app derives them from the address it is
+  # served from, so one build works on both the cloudfront.net URL and the custom
+  # domain (every address must be registered as a Cognito callback/logout URL).
 
 jobs:
   deploy:

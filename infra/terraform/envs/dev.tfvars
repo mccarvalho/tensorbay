@@ -29,7 +29,7 @@ log_retention_days = 30
 # (single-address, no DNS). Switch to no-reply@tensorbay.io once the domain is
 # DKIM-verified. Empty would fall back to Cognito's native invite + temp password.
 ses_from_email = "crm@tensorbay.io"
-app_base_url   = "https://d22xy9yyfwju3n.cloudfront.net"
+app_base_url   = "https://dev.crm.tensorbay.io"
 
 # CI/CD — GitHub Actions keyless deploy role (auto-deploy on push to main)
 enable_cicd                 = true
@@ -47,11 +47,13 @@ container_image = "369607683065.dkr.ecr.us-east-2.amazonaws.com/neocloud-dev-api
 # Identity (Cognito + Google Workspace SSO)
 cognito_domain_prefix = "neocloud-dev-auth"
 cognito_callback_urls = [
+  "https://dev.crm.tensorbay.io/callback",
   "https://d22xy9yyfwju3n.cloudfront.net/callback",
   "http://localhost:3000/callback",
   "https://localhost:3000/callback",
 ]
 cognito_logout_urls = [
+  "https://dev.crm.tensorbay.io/",
   "https://d22xy9yyfwju3n.cloudfront.net/",
   "http://localhost:3000/",
   "https://localhost:3000/logout",
@@ -68,4 +70,4 @@ lead_alert_emails      = "mcarvalho@tensorbay.io"
 # Custom domain (DNS in Cloudflare, CNAME -> CloudFront). Phase 1 requests the ACM
 # certificate; set custom_domain_attach = true once it is ISSUED to attach it.
 custom_domain        = "dev.crm.tensorbay.io"
-custom_domain_attach = false
+custom_domain_attach = true

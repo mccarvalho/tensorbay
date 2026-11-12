@@ -26,8 +26,9 @@ env:
   VITE_ENVIRONMENT: dev
   VITE_COGNITO_DOMAIN: https://neocloud-dev-auth.auth.us-east-2.amazoncognito.com
   VITE_COGNITO_CLIENT_ID: 69ua89fisqeohfmcdhc6a7d16
-  VITE_COGNITO_REDIRECT_URI: https://d22xy9yyfwju3n.cloudfront.net/callback
-  VITE_COGNITO_LOGOUT_URI: https://d22xy9yyfwju3n.cloudfront.net/
+  # Redirect/logout URIs are not set: the app derives them from the address it is
+  # served from, so one build works on both the cloudfront.net URL and the custom
+  # domain (every address must be registered as a Cognito callback/logout URL).
 
 jobs:
   deploy:

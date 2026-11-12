@@ -24,10 +24,10 @@ service_desired_count = 2
 # Observability — longer retention for prod audit
 log_retention_days = 90
 
-# Email (SES) — prod identity mcarvalho@tensorbay.io verified in the prod account
-# (sandbox). Switch to no-reply@tensorbay.io once the domain is DKIM-verified.
-ses_from_email = "mcarvalho@tensorbay.io"
-app_base_url   = "https://d268drxlb2qrjo.cloudfront.net"
+# Email (SES) — platform email is sent from the shared crm@tensorbay.io mailbox
+# (verified identity in the prod account); replies land where the Gmail sync reads.
+ses_from_email = "crm@tensorbay.io"
+app_base_url   = "https://crm.tensorbay.io"
 
 # CI/CD — prod needs its own GitHub OIDC provider + deploy role in this account.
 # The PROD deploy is TAG/MANUAL-gated at the workflow level (see .github/workflows);
@@ -53,11 +53,13 @@ container_image = "104005344884.dkr.ecr.us-east-2.amazonaws.com/neocloud-prod-ap
 cognito_domain_prefix = "neocloud-prod-auth"
 # Prod CloudFront URL wired in after first apply (SSO second pass).
 cognito_callback_urls = [
+  "https://crm.tensorbay.io/callback",
   "https://d268drxlb2qrjo.cloudfront.net/callback",
   "http://localhost:3000/callback",
   "https://localhost:3000/callback",
 ]
 cognito_logout_urls = [
+  "https://crm.tensorbay.io/",
   "https://d268drxlb2qrjo.cloudfront.net/",
   "http://localhost:3000/",
   "https://localhost:3000/logout",
@@ -74,4 +76,4 @@ lead_alert_emails      = "mcarvalho@tensorbay.io,lizi@tensorbay.io"
 # Custom domain (DNS in Cloudflare, CNAME -> CloudFront). Phase 1 requests the ACM
 # certificate; set custom_domain_attach = true once it is ISSUED to attach it.
 custom_domain        = "crm.tensorbay.io"
-custom_domain_attach = false
+custom_domain_attach = true

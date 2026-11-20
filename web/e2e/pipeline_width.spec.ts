@@ -33,7 +33,9 @@ for (const [w, h] of [[1280, 800], [1512, 982], [1920, 1080], [2560, 1440]] as c
     expect(m.total).toBe(10);
     expect(m.pageOverflow).toBeLessThanOrEqual(0);           // no sideways page scroll
     expect(m.mainInnerW - m.boardW).toBeLessThanOrEqual(64);  // board fills the content area (minus padding)
-    if (w >= 1512) expect(m.boardW).toBeGreaterThan(1280);    // wider than the old cap
+    // Wider than the old 1280px cap once the content area has more room than that
+    // (screen minus the 256px sidebar and padding > 1280, i.e. from ~1600px up).
+    if (w >= 1920) expect(m.boardW).toBeGreaterThan(1280);
     if (w >= 2560) expect(m.visible).toBe(10);                // everything fits on a 2560 screen
 
     // Other pages keep the 1280px reading column.

@@ -1,5 +1,5 @@
 import { type ReactElement, useMemo, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { decodeClaims, getSession, logout, type UserClaims } from '../auth';
 import { config } from '../config';
 import { hasPermission, type Permission } from '../permissions';
@@ -10,6 +10,8 @@ interface NavItem {
   role?: string; // if set, only shown to users in this Cognito group
   perm?: Permission; // if set, only shown to users with this permission
 }
+
+const WIDE_ROUTES = ['/sales'];
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard' },
@@ -51,6 +53,10 @@ function navClass({ isActive }: { isActive: boolean }): string {
 export function AppLayout(): ReactElement {
   const claims = useClaims();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Pages that use the full content width instead of the 1280px column. The
+  // pipeline board has ten stage columns and needs the room.
+  const { pathname } = useLocation();
+  const wide = WIDE_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 
   const displayName = claims?.name ?? claims?.email ?? 'Signed in';
   const displayEmail = claims?.email ?? '';
@@ -163,8 +169,8 @@ export function AppLayout(): ReactElement {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 md:px-6 md:py-8">
-          <div className="mx-auto w-full max-w-7xl">
+        <main className="min-w-0 flex-1 px-4 py-6 md:px-6 md:py-8">
+          <div data-testid="page-container" className={wide ? 'w-full' : 'mx-auto w-full max-w-7xl'}>
             <Outlet />
           </div>
         </main>

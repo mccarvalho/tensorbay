@@ -92,7 +92,7 @@ export default function PipelineBoard({
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOverStage(null);
             }}
             onDrop={(e) => canWrite && drop(e, stage)}
-            className={`flex min-w-[230px] flex-1 basis-[230px] flex-col gap-3 rounded-2xl border p-3 transition-colors ${
+            className={`flex min-w-[200px] flex-1 basis-[200px] flex-col gap-3 rounded-2xl border p-3 transition-colors ${
               hot ? 'border-cyan bg-cyan/5' : 'border-white/10 bg-white/[0.02]'
             }`}
           >

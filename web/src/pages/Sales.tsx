@@ -9,6 +9,7 @@ import { decodeClaims, getSession } from '../auth';
 import { GPU_MODELS, COMMERCIAL_MODELS } from '../constants';
 import { hasPermission } from '../permissions';
 import PipelineBoard from './PipelineBoard';
+import { SALES_STAGES, STAGE_LABEL, STAGE_HINT, STAGE_PROBABILITY, STAGE_TONE, type SalesStage } from '../salesStages';
 import {
   KpiCard,
   SectionHeader,
@@ -26,26 +27,11 @@ import {
 // --------------------------------------------------------------------------- //
 // Types (mirror the backend contract)
 // --------------------------------------------------------------------------- //
-type SalesStage =
-  | 'PROSPECTING'
-  | 'QUALIFICATION'
-  | 'PROPOSAL'
-  | 'NEGOTIATION'
-  | 'WON'
-  | 'LOST';
 
 type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
 
 type AvailabilityStatus = 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE';
 
-const SALES_STAGES: SalesStage[] = [
-  'PROSPECTING',
-  'QUALIFICATION',
-  'PROPOSAL',
-  'NEGOTIATION',
-  'WON',
-  'LOST',
-];
 
 /** Signed-in user's identity, for pre-filling the account-owner field. */
 function currentUserOwner(): { name: string | null; email: string | null; sub: string | null } {
@@ -144,14 +130,6 @@ interface CapacityCheck {
 // --------------------------------------------------------------------------- //
 // Helpers
 // --------------------------------------------------------------------------- //
-const STAGE_TONE: Record<SalesStage, BadgeTone> = {
-  PROSPECTING: 'neutral',
-  QUALIFICATION: 'cyan',
-  PROPOSAL: 'grape',
-  NEGOTIATION: 'warning',
-  WON: 'success',
-  LOST: 'flamingo',
-};
 
 const QUOTE_TONE: Record<QuoteStatus, BadgeTone> = {
   DRAFT: 'neutral',
@@ -183,7 +161,7 @@ function emptyOpportunity(stage: SalesStage = 'PROSPECTING'): OpportunityInput {
     duration_months: 12,
     commercial_model: 'GPU_MONTHLY',
     expected_mrr: 0,
-    probability: 50,
+    probability: STAGE_PROBABILITY[stage],
     sales_stage: stage,
     account_owner: currentUserOwner().name,
     account_owner_email: currentUserOwner().email,
@@ -273,7 +251,7 @@ export default function Sales() {
       if (ctx?.previous) qc.setQueryData(['opportunities'], ctx.previous);
       toast.error(errMessage(e, 'Could not move the deal'));
     },
-    onSuccess: (_d, { stage }) => toast.success(`Moved to ${stage.charAt(0) + stage.slice(1).toLowerCase()}`),
+    onSuccess: (_d, { stage }) => toast.success(`Moved to ${STAGE_LABEL[stage]}`),
     onSettled: () => { setMovingId(null); qc.invalidateQueries({ queryKey: ['opportunities'] }); },
   });
 
@@ -345,9 +323,7 @@ export default function Sales() {
   }, [oppsQuery.data]);
 
   const stageCounts = useMemo(() => {
-    const counts: Record<SalesStage, number> = {
-      PROSPECTING: 0, QUALIFICATION: 0, PROPOSAL: 0, NEGOTIATION: 0, WON: 0, LOST: 0,
-    };
+    const counts = Object.fromEntries(SALES_STAGES.map((s) => [s, 0])) as Record<SalesStage, number>;
     for (const o of oppsQuery.data ?? []) counts[o.sales_stage] += 1;
     return counts;
   }, [oppsQuery.data]);
@@ -360,7 +336,7 @@ export default function Sales() {
     { key: 'duration_months', header: 'Term', render: (o) => `${o.duration_months} mo` },
     { key: 'expected_mrr', header: 'Expected MRR', render: (o) => <span className="font-semibold text-cyan">{money(o.expected_mrr)}</span> },
     { key: 'probability', header: 'Prob.', render: (o) => `${o.probability}%` },
-    { key: 'sales_stage', header: 'Stage', render: (o) => <Badge tone={STAGE_TONE[o.sales_stage]}>{o.sales_stage}</Badge> },
+    { key: 'sales_stage', header: 'Stage', render: (o) => <Badge tone={STAGE_TONE[o.sales_stage] ?? 'neutral'}>{STAGE_LABEL[o.sales_stage] ?? o.sales_stage}</Badge> },
     {
       key: 'account_owner',
       header: 'Owner',
@@ -439,7 +415,7 @@ export default function Sales() {
       <div className="flex flex-wrap gap-2">
         {SALES_STAGES.map((s) => (
           <span key={s} className="flex items-center gap-2">
-            <Badge tone={STAGE_TONE[s]}>{s}</Badge>
+            <Badge tone={STAGE_TONE[s]}>{STAGE_LABEL[s]}</Badge>
             <span className="text-sm text-grape-soft">{stageCounts[s]}</span>
           </span>
         ))}
@@ -565,9 +541,13 @@ export default function Sales() {
               <select
                 id="opp_stage" className="input" required
                 value={form.sales_stage}
-                onChange={(e) => setForm({ ...form, sales_stage: e.target.value as SalesStage })}
+                onChange={(e) => {
+                  // Picking a stage also proposes its default probability (still editable).
+                  const st = e.target.value as SalesStage;
+                  setForm({ ...form, sales_stage: st, probability: STAGE_PROBABILITY[st] });
+                }}
               >
-                {SALES_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {SALES_STAGES.map((s) => <option key={s} value={s} title={STAGE_HINT[s]}>{STAGE_LABEL[s]}</option>)}
               </select>
             </div>
           </div>

@@ -4,6 +4,7 @@
 import { useMemo, useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, type BadgeTone } from '../components/ui';
+import { STAGE_HINT, stageLabel, type SalesStage } from '../salesStages';
 
 export type BoardStage = string;
 
@@ -38,8 +39,7 @@ interface Props {
 const usd = (v: number): string =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
 
-const label = (stage: string): string =>
-  stage.charAt(0) + stage.slice(1).toLowerCase().replace(/_/g, ' ');
+const label = stageLabel;
 
 export default function PipelineBoard({
   stages, tones, opportunities, customerName, canWrite, busyId, onMove, onEdit, onQuotes, onAdd,
@@ -92,13 +92,13 @@ export default function PipelineBoard({
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOverStage(null);
             }}
             onDrop={(e) => canWrite && drop(e, stage)}
-            className={`flex min-w-[250px] flex-1 basis-[250px] flex-col gap-3 rounded-2xl border p-3 transition-colors ${
+            className={`flex min-w-[230px] flex-1 basis-[230px] flex-col gap-3 rounded-2xl border p-3 transition-colors ${
               hot ? 'border-cyan bg-cyan/5' : 'border-white/10 bg-white/[0.02]'
             }`}
           >
             <header className="flex items-start justify-between gap-2">
               <div className="flex flex-col gap-1">
-                <Badge tone={tones[stage] ?? 'neutral'}>{label(stage)}</Badge>
+                <span title={STAGE_HINT[stage as SalesStage] ?? ''}><Badge tone={tones[stage] ?? 'neutral'}>{label(stage)}</Badge></span>
                 <span className="text-xs text-grape-soft">
                   {cards.length} {cards.length === 1 ? 'deal' : 'deals'} · {usd(mrr)} MRR
                 </span>

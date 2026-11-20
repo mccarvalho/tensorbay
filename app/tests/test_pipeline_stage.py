@@ -4,6 +4,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from neocloud.audit.service import AuditEntry as AuditLog
+from neocloud.domains.sales.models import STAGE_PROBABILITY, SalesStage
 
 V1 = "/v1"
 
@@ -30,8 +31,10 @@ async def test_stage_only_patch_moves_the_deal_and_leaves_everything_else(client
         assert r.status_code == 200, r.text
         moved = r.json()
         assert moved["sales_stage"] == stage
-        for k in ("quantity", "expected_mrr", "probability", "account_owner", "gpu_model", "customer_id"):
+        # Everything but the stage-driven probability is untouched.
+        for k in ("quantity", "expected_mrr", "account_owner", "gpu_model", "customer_id"):
             assert moved[k] == opp[k], k
+        assert moved["probability"] == STAGE_PROBABILITY[SalesStage(stage)]
     listed = (await client.get(f"{V1}/sales/opportunities")).json()
     assert [o["sales_stage"] for o in listed if o["id"] == opp["id"]] == ["LOST"]
 

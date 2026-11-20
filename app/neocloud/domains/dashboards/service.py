@@ -31,7 +31,7 @@ from neocloud.domains.inventory.models import (
     OperationalStatus,
 )
 from neocloud.domains.reservations.models import Reservation, ReservationStatus
-from neocloud.domains.sales.models import Opportunity, SalesStage
+from neocloud.domains.sales.models import OPEN_STAGES, Opportunity
 
 
 async def _fleet(session: AsyncSession) -> FleetKPIs:
@@ -151,12 +151,7 @@ async def _commercial(session: AsyncSession) -> CommercialKPIs:
     )
 
     # Pipeline demand from open opportunities (not WON/LOST).
-    open_stages = (
-        SalesStage.PROSPECTING,
-        SalesStage.QUALIFICATION,
-        SalesStage.PROPOSAL,
-        SalesStage.NEGOTIATION,
-    )
+    open_stages = OPEN_STAGES
     opp_rows = (
         await session.execute(
             select(Opportunity.quantity, Opportunity.probability).where(
@@ -206,12 +201,7 @@ async def _finance(session: AsyncSession) -> FinanceKPIs:
     arr = mrr * Decimal(12)
 
     # Weighted pipeline MRR from open opportunities.
-    open_stages = (
-        SalesStage.PROSPECTING,
-        SalesStage.QUALIFICATION,
-        SalesStage.PROPOSAL,
-        SalesStage.NEGOTIATION,
-    )
+    open_stages = OPEN_STAGES
     opp_rows = (
         await session.execute(
             select(Opportunity.expected_mrr, Opportunity.probability).where(

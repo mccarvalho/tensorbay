@@ -12,7 +12,8 @@ async function stageOf(api: APIRequestContext, id: string): Promise<string> {
   return (await r.json()).sales_stage;
 }
 
-test.use({ viewport: { width: 1600, height: 1400 } });
+// Wide and tall enough that all ten stage columns fit without scrolling mid-drag.
+test.use({ viewport: { width: 2900, height: 1400 } });
 
 test('pipeline board: drag, move menu, confirmations, rollback, table toggle', async ({ page, playwright }) => {
   const api = await playwright.request.newContext();
@@ -48,7 +49,7 @@ test('pipeline board: drag, move menu, confirmations, rollback, table toggle', a
     // Board is the default view with all six stage columns.
     const board = page.getByTestId('pipeline-board');
     await expect(board).toBeVisible();
-    for (const s of ['PROSPECTING', 'QUALIFICATION', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'])
+    for (const s of ['PROSPECTING', 'QUALIFICATION', 'PROPOSAL', 'POC', 'NEGOTIATION', 'SIGNED', 'DELIVERY', 'ACCEPTANCE', 'WON', 'LOST'])
       await expect(page.getByTestId(`column-${s}`)).toBeVisible();
 
     // Both deals start in Prospecting, biggest first.
@@ -63,9 +64,13 @@ test('pipeline board: drag, move menu, confirmations, rollback, table toggle', a
     await prospecting.getByTestId(`card-${big}`).dragTo(page.getByTestId('column-QUALIFICATION'));
     await expect(page.getByTestId('column-QUALIFICATION').getByTestId(`card-${big}`)).toBeVisible();
     await expect.poll(() => stageOf(api, big)).toBe('QUALIFICATION'); // persisted, not just on screen
+    // The move also set the stage's default probability (20%), shown on the card.
+    await expect(page.getByTestId('column-QUALIFICATION').getByTestId(`card-${big}`)).toContainText('20%');
+    await expect(page.getByTestId('column-NEGOTIATION')).toContainText('Contract review');
+    await expect(page.getByTestId('column-SIGNED')).toContainText('Signed · KYC & Escrow');
 
     // 2. Move menu (keyboard/touch path).
-    await prospecting.getByTestId(`card-${small}`).getByRole('combobox').selectOption('PROPOSAL');
+    await prospecting.getByTestId(`card-${small}`).getByRole('combobox').selectOption('PROPOSAL'); // Proposal
     await expect(page.getByTestId('column-PROPOSAL').getByTestId(`card-${small}`)).toBeVisible();
     await expect.poll(() => stageOf(api, small)).toBe('PROPOSAL');
 
@@ -92,8 +97,9 @@ test('pipeline board: drag, move menu, confirmations, rollback, table toggle', a
     await page.unroute('**/v1/sales/opportunities/*');
 
     // 5. "+" in a column opens a new-opportunity form preset to that stage.
-    await page.getByRole('button', { name: 'Add opportunity to Negotiation' }).click();
-    await expect(page.locator('#opp_stage')).toHaveValue('NEGOTIATION');
+    await page.getByRole('button', { name: 'Add opportunity to Delivery' }).click();
+    await expect(page.locator('#opp_stage')).toHaveValue('DELIVERY');
+    await expect(page.locator('#opp_prob')).toHaveValue('90'); // stage default proposed
     await page.keyboard.press('Escape');
 
     // 6. Table view still works and the choice is remembered.

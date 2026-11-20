@@ -15,12 +15,45 @@ from neocloud.db.base import AuditMixin, Base, TenantMixin, UUIDMixin
 
 
 class SalesStage(StrEnum):
+    """Deal phases, in funnel order.
+
+    Mirrors the TensorBay sales motion: proposal -> optional paid PoC -> contract
+    review (MSA, Order Form, escrow agreement) -> signed with KYC + escrow deposit
+    -> delivery -> 5-day acceptance -> WON once accepted and the escrow releases.
+    ``NEGOTIATION`` is shown as "Contract review"; the code is kept so existing
+    deals need no data migration. Only WON counts for commissions.
+    """
+
     PROSPECTING = "PROSPECTING"
     QUALIFICATION = "QUALIFICATION"
     PROPOSAL = "PROPOSAL"
-    NEGOTIATION = "NEGOTIATION"
+    POC = "POC"
+    NEGOTIATION = "NEGOTIATION"  # "Contract review"
+    SIGNED = "SIGNED"  # Order Form signed; KYC + escrow deposit
+    DELIVERY = "DELIVERY"
+    ACCEPTANCE = "ACCEPTANCE"
     WON = "WON"
     LOST = "LOST"
+
+
+# Still being worked: everything except the two closed outcomes.
+OPEN_STAGES: tuple[SalesStage, ...] = tuple(
+    s for s in SalesStage if s not in (SalesStage.WON, SalesStage.LOST)
+)
+
+# Win probability a deal gets when it moves into a stage (editable per deal).
+STAGE_PROBABILITY: dict[SalesStage, int] = {
+    SalesStage.PROSPECTING: 10,
+    SalesStage.QUALIFICATION: 20,
+    SalesStage.PROPOSAL: 35,
+    SalesStage.POC: 50,
+    SalesStage.NEGOTIATION: 60,
+    SalesStage.SIGNED: 80,
+    SalesStage.DELIVERY: 90,
+    SalesStage.ACCEPTANCE: 95,
+    SalesStage.WON: 100,
+    SalesStage.LOST: 0,
+}
 
 
 class QuoteStatus(StrEnum):

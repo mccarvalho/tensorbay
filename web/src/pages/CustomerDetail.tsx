@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { hasPermission } from '../permissions';
+import { STAGE_TONE, stageLabel } from '../salesStages';
 import { useToast, errMessage } from '../components/toast';
 import {
   SectionHeader,
@@ -468,9 +469,6 @@ const money = (v: string | number) =>
 const CONTRACT_TONE: Record<string, BadgeTone> = {
   DRAFT: 'neutral', ACTIVE: 'success', AMENDED: 'warning', RENEWED: 'cyan', TERMINATED: 'flamingo', EXPIRED: 'neutral',
 };
-const STAGE_TONE: Record<string, BadgeTone> = {
-  PROSPECTING: 'neutral', QUALIFICATION: 'cyan', PROPOSAL: 'grape', NEGOTIATION: 'warning', WON: 'success', LOST: 'flamingo',
-};
 const RES_TONE: Record<string, BadgeTone> = {
   PENDING: 'warning', ACTIVE: 'success', EXPIRED: 'neutral', RELEASED: 'cyan', CANCELLED: 'flamingo',
 };
@@ -501,7 +499,7 @@ function RelatedRecords({ customerId }: { customerId: string }) {
   const oppCols: Array<Column<OpportunityLite>> = [
     { key: 'gpu_model', header: 'Model', render: (o) => <Badge tone="grape">{o.gpu_model}</Badge> },
     { key: 'quantity', header: 'Qty', render: (o) => o.quantity.toLocaleString('en-US') },
-    { key: 'sales_stage', header: 'Stage', render: (o) => <Badge tone={STAGE_TONE[o.sales_stage] ?? 'neutral'}>{o.sales_stage}</Badge> },
+    { key: 'sales_stage', header: 'Stage', render: (o) => <Badge tone={STAGE_TONE[o.sales_stage as keyof typeof STAGE_TONE] ?? 'neutral'}>{stageLabel(o.sales_stage)}</Badge> },
     { key: 'expected_mrr', header: 'MRR', render: (o) => <span className="text-cyan">{money(o.expected_mrr)}</span> },
     { key: 'view', header: '', className: 'text-right', render: (o) => <Link to={`/opportunities/${o.id}`} className="btn-ghost px-2.5 py-1 text-xs">View →</Link> },
   ];

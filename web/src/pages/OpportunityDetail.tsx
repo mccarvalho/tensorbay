@@ -16,8 +16,8 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import { STAGE_LABEL, STAGE_TONE, type SalesStage } from '../salesStages';
 
-type SalesStage = 'PROSPECTING' | 'QUALIFICATION' | 'PROPOSAL' | 'NEGOTIATION' | 'WON' | 'LOST';
 type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
 
 interface Opportunity {
@@ -34,9 +34,6 @@ interface Quote {
 interface Sku { id: string; code: string; name: string }
 interface CustomerLite { id: string; legal_name: string }
 
-const STAGE_TONE: Record<SalesStage, BadgeTone> = {
-  PROSPECTING: 'neutral', QUALIFICATION: 'cyan', PROPOSAL: 'grape', NEGOTIATION: 'warning', WON: 'success', LOST: 'flamingo',
-};
 const QUOTE_TONE: Record<QuoteStatus, BadgeTone> = {
   DRAFT: 'neutral', SENT: 'cyan', ACCEPTED: 'success', REJECTED: 'flamingo', EXPIRED: 'neutral',
 };
@@ -105,7 +102,7 @@ export default function OpportunityDetail() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-        <KpiCard label="Stage" value={<Badge tone={STAGE_TONE[o.sales_stage]}>{o.sales_stage}</Badge>} accent="white" />
+        <KpiCard label="Stage" value={<Badge tone={STAGE_TONE[o.sales_stage] ?? 'neutral'}>{STAGE_LABEL[o.sales_stage] ?? o.sales_stage}</Badge>} accent="white" />
         <KpiCard label="Probability" value={`${o.probability}%`} accent="cyan" />
         <KpiCard label="Expected MRR" value={money(o.expected_mrr)} accent="cyan" />
         <KpiCard label="Model" value={o.commercial_model} accent="grape" />

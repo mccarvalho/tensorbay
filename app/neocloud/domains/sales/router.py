@@ -93,6 +93,11 @@ async def update_opportunity(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Opportunity not found")
 
     changes = payload.model_dump(exclude_unset=True)
+    # Moving a deal to another stage (e.g. dragging it on the board) resets its
+    # probability to that stage's default, unless the caller set one explicitly.
+    new_stage = changes.get("sales_stage")
+    if new_stage is not None and new_stage != obj.sales_stage and "probability" not in changes:
+        changes["probability"] = models.STAGE_PROBABILITY[models.SalesStage(new_stage)]
     for field, value in changes.items():
         setattr(obj, field, value)
     obj.updated_by = user.subject
@@ -104,7 +109,10 @@ async def update_opportunity(
         entity_type="Opportunity",
         entity_id=obj.id,
         actor=user.subject,
-        new_value=payload.model_dump(mode="json", exclude_unset=True),
+        new_value={
+            **payload.model_dump(mode="json", exclude_unset=True),
+            **({"probability": changes["probability"]} if "probability" in changes else {}),
+        },
     )
     await session.refresh(obj)
     return obj

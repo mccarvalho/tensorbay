@@ -7,6 +7,8 @@ import { api } from '../api';
 import { useToast, errMessage } from '../components/toast';
 import { decodeClaims, getSession } from '../auth';
 import { GPU_MODELS, COMMERCIAL_MODELS } from '../constants';
+import { hasPermission } from '../permissions';
+import PipelineBoard from './PipelineBoard';
 import {
   KpiCard,
   SectionHeader,
@@ -172,7 +174,7 @@ const money = (v: string | number | null | undefined): string => {
 const num = (v: number): string => v.toLocaleString('en-US');
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-function emptyOpportunity(): OpportunityInput {
+function emptyOpportunity(stage: SalesStage = 'PROSPECTING'): OpportunityInput {
   return {
     customer_id: '',
     gpu_model: 'H200',
@@ -182,7 +184,7 @@ function emptyOpportunity(): OpportunityInput {
     commercial_model: 'GPU_MONTHLY',
     expected_mrr: 0,
     probability: 50,
-    sales_stage: 'PROSPECTING',
+    sales_stage: stage,
     account_owner: currentUserOwner().name,
     account_owner_email: currentUserOwner().email,
     account_owner_sub: currentUserOwner().sub,
@@ -204,6 +206,13 @@ export default function Sales() {
   const [form, setForm] = useState<OpportunityInput>(emptyOpportunity);
   const [quotesFor, setQuotesFor] = useState<Opportunity | null>(null);
   const [search, setSearch] = useState('');
+  const canWrite = hasPermission('customer.write');
+  // Board (Kanban) is the default; the choice is remembered per browser.
+  const [view, setViewState] = useState<'board' | 'table'>(
+    () => (localStorage.getItem('neocloud.pipeline.view') === 'table' ? 'table' : 'board'),
+  );
+  const setView = (v: 'board' | 'table') => { localStorage.setItem('neocloud.pipeline.view', v); setViewState(v); };
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const oppsQuery = useQuery({
     queryKey: ['opportunities'],
@@ -240,10 +249,40 @@ export default function Sales() {
     onError: (e) => toast.error(errMessage(e, 'Could not update opportunity')),
   });
 
-  function openCreate() {
+  function openCreate(stage: SalesStage = 'PROSPECTING') {
     setEditing(null);
-    setForm(emptyOpportunity());
+    setForm(emptyOpportunity(stage));
     setOppModalOpen(true);
+  }
+
+  // Moving a card changes only its stage. The board updates immediately and rolls
+  // back if the server refuses, so a drag never leaves the screen out of sync.
+  const moveMut = useMutation({
+    mutationFn: ({ id, stage }: { id: string; stage: SalesStage }) =>
+      api.patch<Opportunity>(`/v1/sales/opportunities/${id}`, { sales_stage: stage }),
+    onMutate: async ({ id, stage }) => {
+      setMovingId(id);
+      await qc.cancelQueries({ queryKey: ['opportunities'] });
+      const previous = qc.getQueryData<Opportunity[]>(['opportunities']);
+      qc.setQueryData<Opportunity[]>(['opportunities'], (old) =>
+        (old ?? []).map((o) => (o.id === id ? { ...o, sales_stage: stage } : o)),
+      );
+      return { previous };
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(['opportunities'], ctx.previous);
+      toast.error(errMessage(e, 'Could not move the deal'));
+    },
+    onSuccess: (_d, { stage }) => toast.success(`Moved to ${stage.charAt(0) + stage.slice(1).toLowerCase()}`),
+    onSettled: () => { setMovingId(null); qc.invalidateQueries({ queryKey: ['opportunities'] }); },
+  });
+
+  function moveDeal(o: Opportunity, stage: SalesStage) {
+    const who = customerName(o.customer_id);
+    if (stage === 'WON' && !confirm(`Mark the ${who} deal as WON?`)) return;
+    if (stage === 'LOST' && !confirm(`Mark the ${who} deal as LOST?`)) return;
+    if (o.sales_stage === 'WON' && !confirm(`${who} was marked WON. Move it back to ${stage}?`)) return;
+    moveMut.mutate({ id: o.id, stage });
   }
 
   function openEdit(o: Opportunity) {
@@ -367,9 +406,24 @@ export default function Sales() {
           title="Sales Pipeline"
           description="Opportunities through the funnel — check capacity before quoting, then build priced quotes with line items."
         />
-        <button type="button" className="btn-primary" onClick={openCreate}>
-          + New Opportunity
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="inline-flex overflow-hidden rounded-xl border border-white/10" role="group" aria-label="Pipeline view">
+            {(['board', 'table'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-sm ${view === v ? 'bg-white/10 text-white' : 'text-grape-soft hover:text-white'}`}
+              >
+                {v === 'board' ? 'Board' : 'Table'}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn-primary" onClick={() => openCreate()}>
+            + New Opportunity
+          </button>
+        </div>
       </div>
 
       {/* Pipeline KPIs */}
@@ -397,6 +451,19 @@ export default function Sales() {
         <Spinner label="Loading pipeline…" />
       ) : oppsQuery.isError ? (
         <ErrorState error={oppsQuery.error} />
+      ) : view === 'board' ? (
+        <PipelineBoard
+          stages={SALES_STAGES}
+          tones={STAGE_TONE}
+          opportunities={filteredOpps}
+          customerName={customerName}
+          canWrite={canWrite}
+          busyId={movingId}
+          onMove={(o, stage) => moveDeal(o as Opportunity, stage as SalesStage)}
+          onEdit={(o) => openEdit(o as Opportunity)}
+          onQuotes={(o) => setQuotesFor(o as Opportunity)}
+          onAdd={(stage) => openCreate(stage as SalesStage)}
+        />
       ) : (
         <DataTable
           columns={columns}

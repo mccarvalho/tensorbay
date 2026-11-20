@@ -1,7 +1,7 @@
 // Pipeline board — a Kanban view of opportunities, one column per sales stage.
 // Drag a card to another column to move the deal; the "Move to" menu on each card
 // does the same for keyboard and touch users (native drag & drop is mouse-only).
-import { useMemo, useState, type DragEvent } from 'react';
+import { useMemo, useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, type BadgeTone } from '../components/ui';
 
@@ -44,6 +44,9 @@ const label = (stage: string): string =>
 export default function PipelineBoard({
   stages, tones, opportunities, customerName, canWrite, busyId, onMove, onEdit, onQuotes, onAdd,
 }: Props) {
+  // The id lives in a ref as well as state: `dragover` can fire before React has
+  // re-rendered after `dragstart`, and the handlers must already know a drag is on.
+  const dragRef = useRef<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
 
@@ -59,7 +62,8 @@ export default function PipelineBoard({
 
   function drop(e: DragEvent, stage: BoardStage) {
     e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain') || dragId;
+    const id = dragRef.current || e.dataTransfer.getData('text/plain');
+    dragRef.current = null;
     setDragId(null);
     setOverStage(null);
     const opp = id ? byId.get(id) : undefined;
@@ -78,7 +82,7 @@ export default function PipelineBoard({
             data-testid={`column-${stage}`}
             aria-label={`${label(stage)} column`}
             onDragOver={(e) => {
-              if (!canWrite || !dragId) return;
+              if (!canWrite || !dragRef.current) return;
               e.preventDefault();
               e.dataTransfer.dropEffect = 'move';
               if (overStage !== stage) setOverStage(stage);
@@ -126,9 +130,10 @@ export default function PipelineBoard({
                   onDragStart={(e) => {
                     e.dataTransfer.setData('text/plain', o.id);
                     e.dataTransfer.effectAllowed = 'move';
+                    dragRef.current = o.id;
                     setDragId(o.id);
                   }}
-                  onDragEnd={() => { setDragId(null); setOverStage(null); }}
+                  onDragEnd={() => { dragRef.current = null; setDragId(null); setOverStage(null); }}
                   className={`card flex flex-col gap-2 p-3 ${canWrite ? 'cursor-grab active:cursor-grabbing' : ''} ${
                     dragId === o.id ? 'opacity-40' : ''
                   } ${busyId === o.id ? 'animate-pulse' : ''}`}

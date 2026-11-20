@@ -74,17 +74,27 @@ test('pipeline board: drag, move menu, confirmations, rollback, table toggle', a
     await expect(page.getByTestId('column-PROPOSAL').getByTestId(`card-${small}`)).toBeVisible();
     await expect.poll(() => stageOf(api, small)).toBe('PROPOSAL');
 
-    // 3. WON asks for confirmation: dismissing it moves nothing.
-    page.once('dialog', (d) => d.dismiss());
-    await page.getByTestId('column-QUALIFICATION').getByTestId(`card-${big}`).dragTo(page.getByTestId('column-WON'));
-    await page.waitForTimeout(600);
-    await expect(page.getByTestId('column-QUALIFICATION').getByTestId(`card-${big}`)).toBeVisible();
-    expect(await stageOf(api, big)).toBe('QUALIFICATION');
+    // 3. WON asks for confirmation. Move the deal next to WON first (via the menu),
+    //    and scroll the board so both columns are on screen for a real drag.
+    await page.getByTestId('column-QUALIFICATION').getByTestId(`card-${big}`).getByRole('combobox').selectOption('ACCEPTANCE');
+    const inAcceptance = page.getByTestId('column-ACCEPTANCE').getByTestId(`card-${big}`);
+    await expect(inAcceptance).toContainText('95%');
+    await board.evaluate((b) => { b.scrollLeft = b.scrollWidth; });
+    const dialogs: string[] = [];
+    //    Dismissing the confirmation moves nothing...
+    page.once('dialog', (d) => { dialogs.push(d.message()); void d.dismiss(); });
+    await inAcceptance.dragTo(page.getByTestId('column-WON'));
+    await expect.poll(() => dialogs.length).toBe(1);
+    expect(dialogs[0]).toContain('WON');
+    await expect(inAcceptance).toBeVisible();
+    expect(await stageOf(api, big)).toBe('ACCEPTANCE');
     //    ...accepting it does.
-    page.once('dialog', (d) => d.accept());
-    await page.getByTestId('column-QUALIFICATION').getByTestId(`card-${big}`).dragTo(page.getByTestId('column-WON'));
-    await expect(page.getByTestId('column-WON').getByTestId(`card-${big}`)).toBeVisible();
+    page.once('dialog', (d) => { dialogs.push(d.message()); void d.accept(); });
+    await inAcceptance.dragTo(page.getByTestId('column-WON'));
+    await expect(page.getByTestId('column-WON').getByTestId(`card-${big}`)).toContainText('100%');
     await expect.poll(() => stageOf(api, big)).toBe('WON');
+    expect(dialogs.length).toBe(2);
+    await board.evaluate((b) => { b.scrollLeft = 0; });
 
     // 4. Server refusal rolls the card back: make the PATCH fail once.
     await page.route('**/v1/sales/opportunities/*', async (route) => {

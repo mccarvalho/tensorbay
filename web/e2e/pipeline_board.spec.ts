@@ -12,6 +12,8 @@ async function stageOf(api: APIRequestContext, id: string): Promise<string> {
   return (await r.json()).sales_stage;
 }
 
+test.use({ viewport: { width: 1600, height: 1400 } });
+
 test('pipeline board: drag, move menu, confirmations, rollback, table toggle', async ({ page, playwright }) => {
   const api = await playwright.request.newContext();
   const stamp = Date.now();
@@ -32,7 +34,11 @@ test('pipeline board: drag, move menu, confirmations, rollback, table toggle', a
   try {
     await page.addInitScript((sess) => {
       localStorage.setItem('neocloud.session', JSON.stringify(sess));
-      localStorage.removeItem('neocloud.pipeline.view');
+      // Start from the default view once; later reloads must keep the user's choice.
+      if (!sessionStorage.getItem('e2e.viewReset')) {
+        localStorage.removeItem('neocloud.pipeline.view');
+        sessionStorage.setItem('e2e.viewReset', '1');
+      }
     }, { accessToken: tokens.access, idToken: tokens.id, refreshToken: tokens.refresh, expiresAt: Date.now() + 3600_000 });
     const problems: string[] = [];
     page.on('pageerror', (e) => problems.push(e.message));
@@ -51,7 +57,9 @@ test('pipeline board: drag, move menu, confirmations, rollback, table toggle', a
     const order = await prospecting.locator('article').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
     expect(order.indexOf(`card-${big}`)).toBeLessThan(order.indexOf(`card-${small}`));
 
-    // 1. Real drag & drop: Prospecting -> Qualification.
+    // 1. Real drag & drop: Prospecting -> Qualification. (The window is tall enough
+    //    that nothing scrolls mid-drag: Playwright scrolling between mouse-down and
+    //    the first move would start the drag on whatever card is then under the pointer.)
     await prospecting.getByTestId(`card-${big}`).dragTo(page.getByTestId('column-QUALIFICATION'));
     await expect(page.getByTestId('column-QUALIFICATION').getByTestId(`card-${big}`)).toBeVisible();
     await expect.poll(() => stageOf(api, big)).toBe('QUALIFICATION'); // persisted, not just on screen

@@ -98,7 +98,20 @@ async def _call(session: AsyncSession, conn: DriveConnection, coro):  # noqa: AN
             conn.last_error = "Google access was revoked or expired. Reconnect Google Drive."
             await session.commit()
             raise HTTPException(status_code=409, detail=conn.last_error) from exc
-        raise HTTPException(status_code=502, detail=f"Google Drive error: {str(exc)[:300]}") from exc
+        raise HTTPException(status_code=502, detail=f"Google Drive error: {_google_message(exc)}") from exc
+
+
+def _google_message(exc: Exception) -> str:
+    """Google's own explanation (e.g. "Google Drive API ... is disabled"), not the URL dump."""
+    import json
+
+    try:
+        err = json.loads(getattr(exc, "content", b"") or b"{}").get("error", {})
+        if err.get("message"):
+            return str(err["message"])[:400]
+    except (ValueError, AttributeError):
+        pass
+    return str(exc)[:300]
 
 
 @router.get("/status", response_model=DriveStatus)

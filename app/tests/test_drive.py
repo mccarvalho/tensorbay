@@ -223,3 +223,13 @@ async def test_only_admins_manage_drive(client, env) -> None:
         assert (await client.post(f"{V1}/drive/check")).status_code == 403
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_google_errors_are_shown_in_plain_words() -> None:
+    from neocloud.domains.drive.router import _google_message
+
+    class HttpErr(Exception):
+        content = b'{"error": {"code": 403, "message": "Google Drive API has not been used in project 1 before or it is disabled."}}'
+
+    assert _google_message(HttpErr("<HttpError 403 when requesting https://...>")).startswith("Google Drive API has not been used")
+    assert _google_message(ValueError("boom")) == "boom"

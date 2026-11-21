@@ -114,6 +114,17 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
           "${var.documents_bucket_arn}/documents/*",
           "${var.documents_bucket_arn}/templates/*"
         ]
+      },
+      {
+        # The documents bucket is SSE-KMS encrypted: writing/reading objects
+        # needs the bucket's KMS key, restricted to use through S3.
+        Sid      = "DocumentStorageKms"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = [var.documents_kms_key_arn]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com" }
+        }
       }
     ]
   })

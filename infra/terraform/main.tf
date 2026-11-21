@@ -175,14 +175,15 @@ resource "aws_s3_bucket_public_access_block" "data" {
 module "ai" {
   source = "./modules/ai"
 
-  name_prefix          = local.name_prefix
-  aws_region           = var.aws_region
-  account_id           = data.aws_caller_identity.current.account_id
-  bedrock_model_id     = var.bedrock_model_id
-  enable_guardrail     = var.bedrock_enable_guardrail
-  task_role_name       = module.compute.task_role_name
-  documents_bucket_arn = aws_s3_bucket.data.arn
-  tags                 = local.common_tags
+  name_prefix           = local.name_prefix
+  aws_region            = var.aws_region
+  account_id            = data.aws_caller_identity.current.account_id
+  bedrock_model_id      = var.bedrock_model_id
+  enable_guardrail      = var.bedrock_enable_guardrail
+  task_role_name        = module.compute.task_role_name
+  documents_bucket_arn  = aws_s3_bucket.data.arn
+  documents_kms_key_arn = module.security.kms_s3_key_arn
+  tags                  = local.common_tags
 }
 
 module "email" {

@@ -39,3 +39,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "documents_kms_key_arn" {
+  description = "KMS key encrypting the documents bucket (SSE-KMS)."
+  type        = string
+}

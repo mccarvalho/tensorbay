@@ -1,7 +1,7 @@
 // Google Drive storage for generated documents (Super Admin).
 // Connect the crm@ Google account, point the portal at the shared root folder
 // (e.g. "CRM TensorBay"), and check it can write there. Documents are filed under
-// Clientes/<customer>/<opportunity or contract>/<document type>/.
+// Clients/<client>/<opportunity or contract>/<document type>/.
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
@@ -43,7 +43,7 @@ export default function DriveStorage() {
   });
   const check = useMutation({
     mutationFn: () => api.post<{ ok: boolean; file_url: string | null; folder_path: string }>('/v1/drive/check', {}),
-    onSuccess: (r) => toast.success(`Write check OK: created ${r.folder_path}/LEIA-ME (portal).txt`),
+    onSuccess: (r) => toast.success(`Write check OK: ${r.folder_path}/README (portal).txt is in place`),
     onError: (e) => toast.error(errMessage(e, 'Write check failed')),
   });
   const disconnect = useMutation({
@@ -62,7 +62,7 @@ export default function DriveStorage() {
         <div className="flex flex-col">
           <span className="eyebrow">STORAGE · GOOGLE DRIVE</span>
           <span className="text-sm text-grape-soft">
-            Documents are saved as DOCX in <span className="text-white">Clientes / cliente / oportunidade / tipo</span>.
+            Documents are saved as DOCX in <span className="text-white">Clients / client / opportunity / document type</span>.
           </span>
         </div>
         {s.needs_reconnect ? <Badge tone="flamingo">reconnect needed</Badge>

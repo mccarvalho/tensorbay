@@ -2,7 +2,7 @@
 
 One connection per environment: a Google account (normally crm@tensorbay.io)
 whose Drive holds a shared root folder (e.g. "CRM TensorBay"). Documents are
-filed under ``Clientes/<customer>/<opportunity or contract>/<document type>/``.
+filed under ``Clients/<customer>/<opportunity or contract>/<document type>/``.
 """
 
 from datetime import datetime

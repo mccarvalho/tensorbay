@@ -19,7 +19,8 @@ logger = get_logger(__name__)
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-CLIENTS_FOLDER = "Clientes"
+CLIENTS_FOLDER = "Clients"
+README_NAME = "README (portal).txt"
 _FIELDS = "id,name,mimeType,webViewLink,capabilities(canAddChildren),trashed"
 _ID_IN_URL = re.compile(r"(?:folders/|id=)([A-Za-z0-9_-]{10,})")
 
@@ -42,6 +43,7 @@ class DriveApi(Protocol):
     async def find_child_folder(self, parent_id: str, name: str) -> DriveItem | None: ...
     async def create_folder(self, parent_id: str, name: str) -> DriveItem: ...
     async def upload(self, parent_id: str, name: str, content: bytes, mime: str) -> DriveItem: ...
+    async def find_file(self, parent_id: str, name: str) -> DriveItem | None: ...
 
 
 def folder_id_from(value: str) -> str:
@@ -60,7 +62,7 @@ def safe_name(name: str, limit: int = 120) -> str:
     cleaned = re.sub(r"[\x00-\x1f\x7f]+", " ", name or "")  # line breaks, tabs -> space
     cleaned = re.sub(r"\s*[\\/]+\s*", " - ", cleaned)  # path separators -> " - "
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" .-")
-    return (cleaned or "Sem nome")[:limit]
+    return (cleaned or "Untitled")[:limit]
 
 
 def _q(value: str) -> str:
@@ -143,6 +145,12 @@ class GoogleDrive:
     async def create_folder(self, parent_id: str, name: str) -> DriveItem:
         return await asyncio.to_thread(self._create_folder, parent_id, name)
 
+    async def find_file(self, parent_id: str, name: str) -> DriveItem | None:
+        q = (f"mimeType != '{FOLDER_MIME}' and trashed = false and "
+             f"'{_q(parent_id)}' in parents and name = '{_q(name)}'")
+        found = await asyncio.to_thread(self._list, q, 1)
+        return found[0] if found else None
+
     async def upload(self, parent_id: str, name: str, content: bytes, mime: str) -> DriveItem:
         return await asyncio.to_thread(self._upload, parent_id, name, content, mime)
 
@@ -213,7 +221,7 @@ async def ensure_path(
 
 
 def document_path(customer: str, deal: str | None, doc_type: str) -> list[str]:
-    """``Clientes/<customer>/<deal>/<doc type>`` (deal folder skipped if unknown)."""
+    """``Clients/<customer>/<deal>/<doc type>`` (deal folder skipped if unknown)."""
     parts = [CLIENTS_FOLDER, customer]
     if deal:
         parts.append(deal)

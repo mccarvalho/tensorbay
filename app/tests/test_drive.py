@@ -1,5 +1,5 @@
 """Google Drive storage: connect via the shared Google callback, choose the root
-folder, build Clientes/<customer>/<deal>/<type>/ and file documents."""
+folder, build Clients/<customer>/<deal>/<type>/ and file documents."""
 
 import json
 from urllib.parse import parse_qs, urlparse
@@ -60,6 +60,12 @@ class FakeDrive:
         fid = self._id()
         self.items[fid] = {"name": name, "parent": parent_id, "folder": True, "write": True}
         return DriveItem(fid, name, None)
+
+    async def find_file(self, parent_id, name):
+        for k, v in self.items.items():
+            if not v["folder"] and v["parent"] == parent_id and v["name"] == name:
+                return DriveItem(k, name, None)
+        return None
 
     async def upload(self, parent_id, name, content, mime):
         fid = self._id()
@@ -123,8 +129,8 @@ def test_folder_links_and_names() -> None:
     with pytest.raises(service.DriveError):
         service.folder_id_from("not a link")
     assert service.safe_name("Foxgaroo / B300\n 64 nodes ") == "Foxgaroo - B300 64 nodes"
-    assert service.safe_name("   ") == "Sem nome"
-    assert service.document_path("Akash", None, "MSA") == ["Clientes", "Akash", "MSA"]
+    assert service.safe_name("   ") == "Untitled"
+    assert service.document_path("Akash", None, "MSA") == ["Clients", "Akash", "MSA"]
 
 
 async def test_connect_through_shared_callback_choose_root_and_check(client, env) -> None:
@@ -140,9 +146,13 @@ async def test_connect_through_shared_callback_choose_root_and_check(client, env
     r = await client.put(f"{V1}/drive/root", json={"folder": "https://drive.google.com/drive/folders/ROOTFOLDER123"})
     assert r.status_code == 200 and r.json()["root_folder_name"] == "CRM TensorBay"
     chk = await client.post(f"{V1}/drive/check")
-    assert chk.status_code == 200 and chk.json()["folder_path"] == "CRM TensorBay/Clientes"
+    assert chk.status_code == 200 and chk.json()["folder_path"] == "CRM TensorBay/Clients"
     parent, name, _ = fake.uploads[-1]
-    assert fake.path_of(parent) == "CRM TensorBay/Clientes" and name == "LEIA-ME (portal).txt"
+    assert fake.path_of(parent) == "CRM TensorBay/Clients" and name == "README (portal).txt"
+    # Running the check again neither duplicates the folder nor the note.
+    assert (await client.post(f"{V1}/drive/check")).status_code == 200
+    assert len(fake.uploads) == 1
+    assert len([v for v in fake.items.values() if v["folder"] and v["name"] == "Clients"]) == 1
 
 
 async def test_root_must_be_visible_and_writable(client, env) -> None:
@@ -158,17 +168,17 @@ async def test_document_tree_is_created_once_and_heals(session, env) -> None:
     parts = service.document_path("Foxgaroo", "GB200 216 GPUs", "Order Form")
     a = await service.ensure_path(session, fake, "ROOTFOLDER123", parts, "t")
     b = await service.ensure_path(session, fake, "ROOTFOLDER123", parts, "t")
-    assert a == b and fake.path_of(a) == "CRM TensorBay/Clientes/Foxgaroo/GB200 216 GPUs/Order Form"
+    assert a == b and fake.path_of(a) == "CRM TensorBay/Clients/Foxgaroo/GB200 216 GPUs/Order Form"
     folders = [v for v in fake.items.values() if v["folder"]]
     assert len(folders) == 2 + 4  # two pre-existing + 4 created, no duplicates
     # A sibling type reuses the customer and deal folders.
     c = await service.ensure_path(session, fake, "ROOTFOLDER123", service.document_path("Foxgaroo", "GB200 216 GPUs", "MSA"), "t")
     assert fake.path_of(c).endswith("GB200 216 GPUs/MSA") and len([v for v in fake.items.values() if v["folder"]]) == 7
     # Someone deletes the customer folder in Drive: it is re-created on next save.
-    cust = (await session.execute(select(DriveFolder).where(DriveFolder.path == "/Clientes/Foxgaroo"))).scalars().first()
+    cust = (await session.execute(select(DriveFolder).where(DriveFolder.path == "/Clients/Foxgaroo"))).scalars().first()
     del fake.items[cust.folder_id]
     d = await service.ensure_path(session, fake, "ROOTFOLDER123", parts, "t")
-    assert d != a and fake.path_of(d) == "CRM TensorBay/Clientes/Foxgaroo/GB200 216 GPUs/Order Form"
+    assert d != a and fake.path_of(d) == "CRM TensorBay/Clients/Foxgaroo/GB200 216 GPUs/Order Form"
 
 
 async def test_revoked_access_is_flagged_not_500(client, env) -> None:

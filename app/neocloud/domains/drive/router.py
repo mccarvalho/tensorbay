@@ -189,17 +189,20 @@ async def set_root(payload: RootIn, session: Session, user: Admin, settings: Cfg
 
 @router.post("/check", response_model=CheckOut)
 async def check_write(session: Session, user: Admin, settings: Cfg):
-    """Prove the portal can file documents: create ``Clientes/`` and a small note in it."""
+    """Prove the portal can file documents: create ``Clients/`` and a small note in it (once)."""
     conn, drive = await _drive_or_409(session, settings)
     if not conn.root_folder_id:
         raise HTTPException(status_code=409, detail="Choose the root folder first.")
     note = (
-        "Esta pasta é mantida pelo portal TensorBay. Os documentos gerados são salvos em\n"
-        "Clientes/<cliente>/<oportunidade ou contrato>/<tipo de documento>/.\n"
+        "This folder is maintained by the TensorBay portal. Generated documents are saved in\n"
+        "Clients/<client>/<opportunity or contract>/<document type>/.\n"
     ).encode()
-    item = await _call(session, conn, service.save_file(
-        session, drive, conn, [service.CLIENTS_FOLDER], "LEIA-ME (portal).txt", note, "text/plain", user.subject,
+    clients = await _call(session, conn, service.ensure_path(
+        session, drive, conn.root_folder_id, [service.CLIENTS_FOLDER], user.subject,
     ))
+    item = await _call(session, conn, drive.find_file(clients, service.README_NAME))
+    if item is None:
+        item = await _call(session, conn, drive.upload(clients, service.README_NAME, note, "text/plain"))
     await session.commit()
     return CheckOut(ok=True, file_url=item.url, folder_path=f"{conn.root_folder_name}/{service.CLIENTS_FOLDER}")
 

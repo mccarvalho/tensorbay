@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
 def _register_routers(app: FastAPI, prefix: str) -> None:
     """Register domain routers. Imported lazily to avoid heavy import at module load."""
     from neocloud.domains.admin.router import router as admin_router
+    from neocloud.domains.capacity.orders import router as capacity_orders_router
     from neocloud.domains.capacity.router import router as capacity_router
     from neocloud.domains.catalog.router import router as catalog_router
     from neocloud.domains.contracts.router import router as contracts_router
@@ -71,6 +72,7 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
         catalog_router,
         inventory_router,
         capacity_router,
+        capacity_orders_router,
         suppliers_router,
         sales_router,
         contracts_router,

@@ -216,7 +216,7 @@ variable "economics_alert_emails" {
 variable "bedrock_model_id" {
   description = "Bedrock model ID or cross-region inference profile used for AI document generation (MSA/LOI/Proposal/Contract). Models in us-east-2 require an inference profile."
   type        = string
-  default     = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  default     = "us.anthropic.claude-sonnet-4-6"
 }
 
 variable "bedrock_enable_guardrail" {

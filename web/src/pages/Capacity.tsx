@@ -18,6 +18,7 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import { SupplyForecast, SupplyOrdersSection } from './SupplyOrders';
 
 interface Ledger {
   gpu_model: string;
@@ -108,6 +109,9 @@ export default function Capacity() {
 
       {/* Fleet-wide capacity + overselling overview + incoming timeline */}
       <FleetOverview />
+
+      {/* Contracted GPU supply by month (commercial view) */}
+      <SupplyForecast />
 
       {/* Ledger lookup */}
       <section className="flex flex-col gap-4">
@@ -222,6 +226,9 @@ export default function Capacity() {
           </div>
         ) : null}
       </section>
+
+      {/* Supply orders: purchases recorded by totals, with delivery lots */}
+      <SupplyOrdersSection />
 
       {/* Incoming capacity */}
       <IncomingSection />

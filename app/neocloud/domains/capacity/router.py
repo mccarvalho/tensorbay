@@ -25,6 +25,8 @@ WriteUser = Annotated[CurrentUser, Depends(require_permission(Permission.INVENTO
 Session = Annotated[AsyncSession, Depends(get_session)]
 Limit = Annotated[int, Query(ge=1, le=500)]
 Offset = Annotated[int, Query(ge=0)]
+# Fields of a delivery lot that are owned by its supply order.
+_ORDER_OWNED = {"quantity", "gpu_model", "supplier_id", "unit_price", "currency", "purchase_order"}
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +118,11 @@ async def update_incoming(
 ):
     obj = await _get_or_404(session, incoming_id)
     changes = payload.model_dump(exclude_unset=True)
+    if obj.order_id and changes.keys() & _ORDER_OWNED:
+        raise HTTPException(
+            status_code=409,
+            detail="This is a delivery lot of a supply order; change it from the order.",
+        )
     for key, value in changes.items():
         setattr(obj, key, value)
     obj.updated_by = user.subject
@@ -135,6 +142,11 @@ async def update_incoming(
 @router.delete("/incoming/{incoming_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_incoming(incoming_id: str, session: Session, user: WriteUser):
     obj = await _get_or_404(session, incoming_id)
+    if obj.order_id:
+        raise HTTPException(
+            status_code=409,
+            detail="This is a delivery lot of a supply order; remove it from the order.",
+        )
     await session.delete(obj)
     await record_audit(
         session,

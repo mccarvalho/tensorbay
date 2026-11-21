@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     auth_enabled: bool = True
 
     # AI (Bedrock)
-    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6"
     bedrock_guardrail_id: str | None = None
     bedrock_guardrail_version: str = "DRAFT"
 

@@ -71,3 +71,9 @@ lead_alert_emails      = "mcarvalho@tensorbay.io"
 # certificate; set custom_domain_attach = true once it is ISSUED to attach it.
 custom_domain        = "dev.crm.tensorbay.io"
 custom_domain_attach = true
+
+# AI documents: Amazon Nova 2 Lite while the Anthropic Marketplace subscription is
+# blocked (INVALID_PAYMENT_INSTRUMENT on the payer). Nova is first-party, so it
+# needs no Marketplace subscription. Switch back to us.anthropic.claude-sonnet-4-6
+# once Anthropic access is fixed.
+bedrock_model_id = "us.amazon.nova-2-lite-v1:0"

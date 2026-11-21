@@ -160,23 +160,59 @@ async def start_connect(
     return ConnectStart(authorization_url=oauth.authorization_url(settings, mb.address, state))
 
 
-@router.post("/oauth/callback", response_model=MailboxRead)
+@router.post("/oauth/callback")
 async def finish_connect(
     payload: ConnectComplete,
     session: Session,
     user: Admin,
     settings: Annotated[Settings, Depends(get_settings)],
-):
-    """Called by the frontend after Google redirects back with ``code`` + ``state``."""
+) -> dict:
+    """Called by the frontend after Google redirects back with ``code`` + ``state``.
+
+    One Google redirect URI serves every Google connection; the signed state says
+    which one this is (a mailbox, or the Drive used to file documents)."""
     try:
-        mailbox_id = oauth.parse_state(settings, payload.state, user.subject)
+        kind, target = oauth.parse_state_kind(settings, payload.state, user.subject)
+    except oauth.OAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if kind == oauth.KIND_DRIVE:
+        from neocloud.domains.drive.router import complete_connect
+
+        try:
+            st = await complete_connect(session, settings, user, payload.code)
+        except oauth.OAuthError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"kind": "drive", "address": st.account_email, **st.model_dump(mode="json")}
+    out = await _finish_mailbox(session, settings, user, payload, target)
+    return {"kind": "mailbox", **MailboxRead.model_validate(out).model_dump(mode="json")}
+
+
+async def _grant_in_use(session: AsyncSession, email: str, except_mailbox: str | None = None) -> bool:
+    """True if another connection relies on this Google account's grant.
+
+    Revoking a token at Google revokes the whole grant for that account + OAuth
+    client, so it would also cut any other mailbox or the Drive connection."""
+    from neocloud.domains.drive.service import get_connection
+
+    email = email.lower()
+    boxes = (await session.execute(select(Mailbox).where(func.lower(Mailbox.address) == email))).scalars().all()
+    if any(b.refresh_token_enc and b.id != except_mailbox for b in boxes):
+        return True
+    drive = await get_connection(session)
+    return bool(drive and drive.refresh_token_enc and drive.account_email.lower() == email)
+
+
+async def _finish_mailbox(session, settings, user, payload, mailbox_id):  # noqa: ANN001, ANN202
+    try:
         mb = await session.get(Mailbox, mailbox_id)
         if mb is None:
             raise oauth.OAuthError("That mailbox no longer exists.")
         result = await oauth.exchange_code(settings, payload.code)
         if result.email != mb.address.lower():
-            # Revoke what we were just handed: it belongs to the wrong account.
-            await oauth.revoke_token(result.refresh_token)
+            # Revoke what we were just handed (wrong account), unless that account's
+            # grant also powers another connection.
+            if not await _grant_in_use(session, result.email):
+                await oauth.revoke_token(result.refresh_token)
             raise oauth.OAuthError(
                 f"You signed in as {result.email}, but this mailbox is {mb.address}. "
                 "Sign in with the mailbox's own Google account."
@@ -209,7 +245,7 @@ async def disconnect(
     mb = await session.get(Mailbox, mailbox_id)
     if mb is None:
         raise HTTPException(status_code=404, detail="Mailbox not found")
-    if mb.refresh_token_enc:
+    if mb.refresh_token_enc and not await _grant_in_use(session, mb.address, except_mailbox=mb.id):
         token = oauth.decrypt_token(settings, mb.refresh_token_enc)
         if token:
             await oauth.revoke_token(token)

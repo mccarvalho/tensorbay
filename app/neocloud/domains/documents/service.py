@@ -90,6 +90,7 @@ class BedrockDocumentService:
             "messages": [
                 {"role": "user", "content": [{"text": prompt}]},
             ],
+            "inferenceConfig": {"maxTokens": self.settings.bedrock_max_tokens},
         }
         if self.settings.bedrock_guardrail_id:
             converse_kwargs["guardrailConfig"] = {

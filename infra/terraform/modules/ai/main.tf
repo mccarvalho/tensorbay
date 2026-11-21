@@ -85,9 +85,10 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
         ]
         # Cross-region inference profiles invoke the foundation models in any
         # of the region's partners, so allow the FM ARNs broadly plus the
-        # inference profile ARNs. Scope to Anthropic models.
+        # inference profile ARNs. Scope to Anthropic and Amazon Nova models.
         Resource = [
           "arn:aws:bedrock:*::foundation-model/anthropic.*",
+          "arn:aws:bedrock:*::foundation-model/amazon.nova*",
           "arn:aws:bedrock:${var.aws_region}:${var.account_id}:inference-profile/*",
           "arn:aws:bedrock:*:${var.account_id}:inference-profile/*"
         ]

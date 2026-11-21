@@ -43,6 +43,9 @@ class Settings(BaseSettings):
 
     # AI (Bedrock)
     bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6"
+    # Output budget per generated document (contracts are long). Nova 2 Lite and
+    # Claude Sonnet 4.6 both allow far more; Nova Pro caps at 10k.
+    bedrock_max_tokens: int = 16000
     bedrock_guardrail_id: str | None = None
     bedrock_guardrail_version: str = "DRAFT"
 

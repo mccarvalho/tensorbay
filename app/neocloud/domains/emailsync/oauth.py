@@ -28,7 +28,12 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
 LOGIN_SCOPES = ["openid", "email", GMAIL_SCOPE]
+DRIVE_LOGIN_SCOPES = ["openid", "email", DRIVE_SCOPE]
+# What a signed OAuth state was issued for.
+KIND_MAILBOX = "mailbox"
+KIND_DRIVE = "drive"
 STATE_TTL_SECONDS = 600
 _SECRET_TTL = 300
 _secret_cache: dict[str, tuple[float, dict | None]] = {}
@@ -128,16 +133,21 @@ def decrypt_token(settings: Settings, blob: str) -> str | None:
         return None
 
 
-def make_state(settings: Settings, mailbox_id: str, user_sub: str) -> str:
+def make_state(settings: Settings, mailbox_id: str, user_sub: str, kind: str = KIND_MAILBOX) -> str:
     f = _fernet(settings)
     if f is None:
         raise OAuthError("Token encryption key is not configured")
-    payload = json.dumps({"m": mailbox_id, "u": user_sub}).encode()
+    payload = json.dumps({"m": mailbox_id, "u": user_sub, "k": kind}).encode()
     return base64.urlsafe_b64encode(f.encrypt(payload)).decode()
 
 
 def parse_state(settings: Settings, state: str, user_sub: str) -> str:
-    """Return the mailbox id the state was issued for, or raise OAuthError.
+    """Return the target id the state was issued for, or raise OAuthError."""
+    return parse_state_kind(settings, state, user_sub)[1]
+
+
+def parse_state_kind(settings: Settings, state: str, user_sub: str) -> tuple[str, str]:
+    """Return ``(kind, target_id)`` for a state, or raise OAuthError.
 
     The state is encrypted + timestamped by Fernet (so it can't be forged or
     replayed after ``STATE_TTL_SECONDS``) and bound to the admin who started it.
@@ -152,13 +162,15 @@ def parse_state(settings: Settings, state: str, user_sub: str) -> str:
         raise OAuthError("This connection attempt expired. Start again from the Email page.") from None
     if data.get("u") != user_sub:
         raise OAuthError("This connection was started by a different user.")
-    return str(data["m"])
+    return str(data.get("k") or KIND_MAILBOX), str(data["m"])
 
 
 # --------------------------------------------------------------------------- #
 # Google round trips
 # --------------------------------------------------------------------------- #
-def authorization_url(settings: Settings, mailbox_address: str, state: str) -> str:
+def authorization_url(
+    settings: Settings, mailbox_address: str, state: str, scopes: list[str] | None = None
+) -> str:
     client = load_oauth_client(settings)
     if client is None:
         raise OAuthError("Google OAuth client is not configured")
@@ -166,7 +178,7 @@ def authorization_url(settings: Settings, mailbox_address: str, state: str) -> s
         "client_id": client.client_id,
         "redirect_uri": redirect_uri(settings),
         "response_type": "code",
-        "scope": " ".join(LOGIN_SCOPES),
+        "scope": " ".join(scopes or LOGIN_SCOPES),
         "access_type": "offline",  # gives us a refresh token
         "prompt": "consent",  # ...every time, even if approved before
         "login_hint": mailbox_address,
@@ -175,7 +187,9 @@ def authorization_url(settings: Settings, mailbox_address: str, state: str) -> s
     return f"{AUTH_URL}?{urlencode(params)}"
 
 
-async def exchange_code(settings: Settings, code: str) -> ExchangeResult:
+async def exchange_code(
+    settings: Settings, code: str, required_scope: str = GMAIL_SCOPE
+) -> ExchangeResult:
     client = load_oauth_client(settings)
     if client is None:
         raise OAuthError("Google OAuth client is not configured")
@@ -197,8 +211,9 @@ async def exchange_code(settings: Settings, code: str) -> ExchangeResult:
         refresh = tok.get("refresh_token")
         if not refresh:
             raise OAuthError("Google did not return a refresh token. Please try connecting again.")
-        if GMAIL_SCOPE not in (tok.get("scope") or "").split():
-            raise OAuthError("Read access to Gmail was not granted. Approve every permission requested.")
+        if required_scope not in (tok.get("scope") or "").split():
+            what = "Google Drive" if required_scope == DRIVE_SCOPE else "Gmail (read-only)"
+            raise OAuthError(f"Access to {what} was not granted. Approve every permission requested.")
         info = await http.get(USERINFO_URL, headers={"Authorization": f"Bearer {tok['access_token']}"})
         if info.status_code != 200 or not info.json().get("email"):
             raise OAuthError("Could not confirm which Google account was used.")

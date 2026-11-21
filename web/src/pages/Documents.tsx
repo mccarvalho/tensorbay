@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { config } from '../config';
+import DriveStorage from './DriveStorage';
 import {
   SectionHeader,
   Spinner,
@@ -151,8 +152,10 @@ export default function Documents() {
       <SectionHeader
         eyebrow="AI · AMAZON BEDROCK"
         title="AI Documents"
-        description="Generate MSAs, LOIs, proposals, and contracts with Claude on Amazon Bedrock, then route them through approval."
+        description="Generate MSAs, LOIs, proposals, and contracts with AI on Amazon Bedrock, then route them through approval."
       />
+
+      <DriveStorage />
 
       {/* Generation panel — gated behind the aiDocs feature flag while the
           Anthropic model-access form is pending in the Bedrock console. */}

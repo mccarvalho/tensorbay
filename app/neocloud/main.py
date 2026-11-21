@@ -59,6 +59,7 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
     from neocloud.domains.dashboards.router import router as dashboards_router
     from neocloud.domains.directory.router import router as directory_router
     from neocloud.domains.documents.router import router as documents_router
+    from neocloud.domains.drive.router import router as drive_router
     from neocloud.domains.economics.router import router as economics_router
     from neocloud.domains.emailsync.router import router as emailsync_router
     from neocloud.domains.inventory.router import router as inventory_router
@@ -83,6 +84,7 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
         economics_router,
         leads_router,
         emailsync_router,
+        drive_router,
         admin_router,
     ):
         app.include_router(r, prefix=prefix)

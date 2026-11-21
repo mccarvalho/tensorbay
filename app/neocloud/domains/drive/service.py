@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from datetime import date, datetime
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -218,6 +219,18 @@ async def ensure_path(
         await session.flush()
         parent = found.id
     return parent
+
+
+def opportunity_folder_name(
+    created: "date | datetime", short_name: str | None, gpu_model: str, quantity: int
+) -> str:
+    """``YYYY-MM-<short name>`` from the month the opportunity was created.
+
+    The creation month never changes, so a deal keeps its folder. Without a short
+    name the deal is labelled by what it is, e.g. ``2026-11-B300-512``.
+    """
+    label = (short_name or "").strip() or f"{gpu_model}-{quantity}"
+    return safe_name(f"{created.year:04d}-{created.month:02d}-{label}")
 
 
 def document_path(customer: str, deal: str | None, doc_type: str) -> list[str]:

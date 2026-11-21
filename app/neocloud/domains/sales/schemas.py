@@ -14,6 +14,7 @@ from neocloud.domains.sales.models import QuoteStatus, SalesStage
 
 class OpportunityBase(BaseModel):
     customer_id: str
+    short_name: str | None = Field(default=None, max_length=60)
     gpu_model: str
     sku_id: str | None = None
     quantity: int = Field(gt=0)
@@ -34,6 +35,7 @@ class OpportunityCreate(OpportunityBase):
 
 class OpportunityUpdate(BaseModel):
     customer_id: str | None = None
+    short_name: str | None = Field(default=None, max_length=60)
     gpu_model: str | None = None
     sku_id: str | None = None
     quantity: int | None = Field(default=None, gt=0)

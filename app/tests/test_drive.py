@@ -243,3 +243,26 @@ def test_google_errors_are_shown_in_plain_words() -> None:
 
     assert _google_message(HttpErr("<HttpError 403 when requesting https://...>")).startswith("Google Drive API has not been used")
     assert _google_message(ValueError("boom")) == "boom"
+
+
+def test_opportunity_folder_is_year_month_short_name() -> None:
+    from datetime import date, datetime
+
+    assert service.opportunity_folder_name(datetime(2026, 11, 21, 15, 0), "Foxgaroo GB200", "GB200", 216) == "2026-11-Foxgaroo GB200"
+    assert service.opportunity_folder_name(date(2027, 1, 5), None, "B300", 512) == "2027-01-B300-512"
+    assert service.opportunity_folder_name(date(2027, 1, 5), "  ", "B300", 512) == "2027-01-B300-512"
+    assert service.opportunity_folder_name(date(2026, 3, 1), "Akash / phase 2", "H200", 8) == "2026-03-Akash - phase 2"
+    parts = service.document_path("Foxgaroo", service.opportunity_folder_name(date(2026, 11, 1), "GB200 216", "GB200", 216), "Order Form")
+    assert parts == ["Clients", "Foxgaroo", "2026-11-GB200 216", "Order Form"]
+
+
+async def test_opportunity_short_name_round_trip(client) -> None:
+    cid = (await client.post(f"{V1}/customers", json={"legal_name": "Short Co", "status": "PROSPECT"})).json()["id"]
+    body = {"customer_id": cid, "gpu_model": "B300", "quantity": 64, "duration_months": 12,
+            "commercial_model": "GPU_MONTHLY", "expected_mrr": "1000", "short_name": "Short B300"}
+    o = (await client.post(f"{V1}/sales/opportunities", json=body)).json()
+    assert o["short_name"] == "Short B300"
+    o = (await client.patch(f"{V1}/sales/opportunities/{o['id']}", json={"short_name": "Renamed"})).json()
+    assert o["short_name"] == "Renamed"
+    too_long = await client.post(f"{V1}/sales/opportunities", json={**body, "short_name": "x" * 61})
+    assert too_long.status_code == 422

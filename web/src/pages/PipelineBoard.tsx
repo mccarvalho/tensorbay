@@ -11,6 +11,7 @@ export type BoardStage = string;
 export interface BoardOpportunity {
   id: string;
   customer_id: string;
+  short_name?: string | null;
   gpu_model: string;
   quantity: number;
   duration_months: number;
@@ -142,6 +143,7 @@ export default function PipelineBoard({
                     <span className="font-semibold leading-snug text-white">{customerName(o.customer_id)}</span>
                     <Badge tone="grape">{o.gpu_model}</Badge>
                   </div>
+                  {o.short_name && <div className="-mt-1 text-sm text-cyan">{o.short_name}</div>}
                   <div className="text-xs text-grape-soft">
                     {o.quantity.toLocaleString('en-US')} × {o.commercial_model} · {o.duration_months} mo
                   </div>

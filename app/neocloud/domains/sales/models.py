@@ -68,6 +68,8 @@ class Opportunity(Base, UUIDMixin, AuditMixin, TenantMixin):
     __tablename__ = "opportunities"
 
     customer_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    # Short label used to name the deal's Drive folder: "YYYY-MM-<short_name>".
+    short_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
     gpu_model: Mapped[str] = mapped_column(String(128), nullable=False)
     sku_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)

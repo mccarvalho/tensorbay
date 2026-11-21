@@ -54,6 +54,8 @@ const QUOTE_STATUSES: QuoteStatus[] = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 
 interface Opportunity {
   id: string;
   customer_id: string;
+  short_name: string | null;
+  created_at: string;
   gpu_model: string;
   sku_id: string | null;
   quantity: number;
@@ -70,6 +72,7 @@ interface Opportunity {
 
 interface OpportunityInput {
   customer_id: string;
+  short_name: string;
   gpu_model: string;
   quantity: number;
   expected_start: string | null;
@@ -152,9 +155,18 @@ const money = (v: string | number | null | undefined): string => {
 const num = (v: number): string => v.toLocaleString('en-US');
 const today = (): string => new Date().toISOString().slice(0, 10);
 
+/** Mirrors drive.service.opportunity_folder_name: YYYY-MM-<short name> (creation month). */
+function driveFolder(createdAt: string | undefined, shortName: string, gpuModel: string, qty: number): string {
+  const d = createdAt ? new Date(createdAt) : new Date();
+  const label = shortName.trim() || `${gpuModel}-${qty}`;
+  const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  return `${ym}-${label.replace(/\s*[\\/]+\s*/g, ' - ').replace(/\s+/g, ' ')}`;
+}
+
 function emptyOpportunity(stage: SalesStage = 'PROSPECTING'): OpportunityInput {
   return {
     customer_id: '',
+    short_name: '',
     gpu_model: 'H200',
     quantity: 8,
     expected_start: today(),
@@ -267,6 +279,7 @@ export default function Sales() {
     setEditing(o);
     setForm({
       customer_id: o.customer_id,
+      short_name: o.short_name ?? '',
       gpu_model: o.gpu_model,
       quantity: o.quantity,
       expected_start: o.expected_start,
@@ -290,8 +303,10 @@ export default function Sales() {
 
   function submitOpp(e: FormEvent) {
     e.preventDefault();
-    if (editing) updateMut.mutate({ id: editing.id, payload: form });
-    else createMut.mutate(form);
+    // An empty short name is stored as "none" (the folder then uses <model>-<qty>).
+    const payload = { ...form, short_name: (form.short_name.trim() || null) as unknown as string };
+    if (editing) updateMut.mutate({ id: editing.id, payload });
+    else createMut.mutate(payload);
   }
 
   // Client-side search over the opportunities list.
@@ -468,6 +483,15 @@ export default function Sales() {
                 <option key={c.id} value={c.id}>{c.legal_name}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="opp_short">Short name</label>
+            <input id="opp_short" className="input" maxLength={60} placeholder="e.g. Foxgaroo GB200"
+              value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} />
+            <p className="mt-1 text-xs text-grape-soft" data-testid="opp-folder-preview">
+              Drive folder: <span className="text-white">{driveFolder(editing?.created_at, form.short_name, form.gpu_model, form.quantity)}</span>
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

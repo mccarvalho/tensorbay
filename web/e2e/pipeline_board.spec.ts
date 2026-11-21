@@ -110,6 +110,11 @@ test('pipeline board: drag, move menu, confirmations, rollback, table toggle', a
     await page.getByRole('button', { name: 'Add opportunity to Delivery' }).click();
     await expect(page.locator('#opp_stage')).toHaveValue('DELIVERY');
     await expect(page.locator('#opp_prob')).toHaveValue('90'); // stage default proposed
+    // Short name drives the Drive folder name: YYYY-MM-<short name> (creation month).
+    const ym = new Date().toISOString().slice(0, 7);
+    await expect(page.getByTestId('opp-folder-preview')).toContainText(`${ym}-H200-8`);
+    await page.locator('#opp_short').fill('Foxgaroo GB200');
+    await expect(page.getByTestId('opp-folder-preview')).toContainText(`${ym}-Foxgaroo GB200`);
     await page.keyboard.press('Escape');
 
     // 6. Table view still works and the choice is remembered.

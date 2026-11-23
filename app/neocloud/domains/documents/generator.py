@@ -78,6 +78,9 @@ def build_document(
             return forms.fill_msa(template, ctx, spec_line, notes), None
         return forms.fill_nda(template, ctx, notes), None
 
+    kind = {"PROPOSAL": "PROP", "ORDER_FORM": "OF", "POC_AGREEMENT": "POC", "ESCROW_AGREEMENT": "ESC",
+            "ACCEPTANCE_NOTICE": "ACC", "LOI": "LOI", "CONTRACT": "CON"}.get(doc_type, doc_type)
+    ctx = {**ctx, "reference": ctx["reference"].format(kind=kind)}
     deal_json = json.dumps(ctx, indent=1, ensure_ascii=False, default=str)
     user = prompts.user_prompt(doc_type, deal_json, _references(base, doc_type, opp["gpu_model"]), notes)
     markdown = svc.complete(prompts.SYSTEM_PROMPT, user, max_tokens=svc.settings.bedrock_max_tokens)

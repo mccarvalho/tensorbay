@@ -143,6 +143,7 @@ async def test_proposal_is_generated_downloaded_and_filed_in_drive(client, env):
     assert doc["file_name"] in r.headers["content-disposition"]
     text = _text(r.content)
     assert "Reserved Capacity Proposal" in text and "512 GPUs" in text and "36 months" in text
+    assert '"reference": "TB-PROP-POSITIVO-' in user  # the AI is given a ready-made document number
     # Filed in Drive: Clients/<customer>/YYYY-MM-<short name>/Proposal/
     (parent, name, content), = env.drive.uploads
     assert name == doc["file_name"] and content == r.content
@@ -236,12 +237,14 @@ async def test_nda_fills_party_b(client, env, monkeypatch):
 
 
 def test_markdown_renders_headings_tables_lists_and_bold():
-    data = render.markdown_to_docx(MARKDOWN + "\n**Bold line** and text\n", "Test")
+    data = render.markdown_to_docx(MARKDOWN + "\n**Bold line** and text\n*Italic note, not a bullet.*\n2 * 3 * 4 stays\n", "Test")
     d = docx.Document(io.BytesIO(data))
     styles = [p.style.name for p in d.paragraphs]
     assert "Title" in styles and "Heading 2" in styles and "List Bullet" in styles and "List Number" in styles
     assert len(d.tables) == 1 and d.tables[0].cell(1, 1).text == "NVIDIA B300"
     assert any(r.bold and r.text == "Term:" for p in d.paragraphs for r in p.runs)
+    assert any(r.italic and r.text == "Italic note, not a bullet." for p in d.paragraphs for r in p.runs)
+    assert any(p.text == "2 * 3 * 4 stays" for p in d.paragraphs)
     assert "TensorBay" in d.sections[0].header.paragraphs[0].text
     assert "Confidential" in d.sections[0].footer.paragraphs[0].text
 

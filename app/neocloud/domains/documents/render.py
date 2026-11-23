@@ -19,7 +19,7 @@ FONT = "Calibri"
 TENSORBAY_TAGLINE = "GPU Cloud & AI Infrastructure"
 FOOTER = "TensorBay Technology, LLC · Confidential · Draft for review"
 
-_BOLD = re.compile(r"(\*\*[^*]+\*\*)")
+_BOLD = re.compile(r"(\*\*[^*]+\*\*|(?<![*\w])\*[^*\s][^*]*\*(?![*\w]))")
 
 
 # --------------------------------------------------------------------------- #
@@ -29,9 +29,11 @@ def _runs(par: Paragraph, text: str, *, size: float | None = None, bold: bool = 
     for part in _BOLD.split(text):
         if not part:
             continue
-        is_bold = part.startswith("**") and part.endswith("**")
-        run = par.add_run(part[2:-2] if is_bold else part)
+        is_bold = part.startswith("**") and part.endswith("**") and len(part) > 4
+        is_italic = not is_bold and part.startswith("*") and part.endswith("*") and len(part) > 2
+        run = par.add_run(part[2:-2] if is_bold else part[1:-1] if is_italic else part)
         run.bold = bold or is_bold
+        run.italic = is_italic or None
         run.font.name = FONT
         if size:
             run.font.size = Pt(size)

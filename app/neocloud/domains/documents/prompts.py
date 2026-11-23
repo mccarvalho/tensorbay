@@ -45,8 +45,8 @@ INSTRUCTIONS: dict[str, str] = {
     ),
     "ESCROW_AGREEMENT": (
         "Write the commercial escrow terms sheet and instruction letter for this deal, based on Schedule D "
-        "Part 2 of the reference MSA: escrow agent [TO BE COMPLETED unless given in the notes], amount (months "
-        "of Fees), funding deadline, monthly release to TensorBay, replenishment, release on acceleration, "
+        "Part 2 of the reference MSA: escrow agent [TO BE COMPLETED unless given in the notes], amount (number of months of Fees: only if given in the "
+        "DEAL DATA or NOTES, otherwise [TO BE COMPLETED]), funding deadline, monthly release to TensorBay, replenishment, release on acceleration, "
         "release of the balance at the end of the Term, fees borne by the customer. State that this is a "
         "commercial summary and that the escrow agent's own documents govern the account. Add signature "
         "blocks."

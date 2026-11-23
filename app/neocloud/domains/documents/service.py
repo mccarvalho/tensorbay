@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a senior commercial counsel drafting GPU cloud agreements for "
-    "NeoCloud. Produce clear, well-structured Markdown. Only use facts present "
+    "TensorBay. Produce clear, well-structured Markdown. Only use facts present "
     "in the provided context; do not invent clauses, prices, or legal terms. "
     "Flag any missing information explicitly as [TO BE COMPLETED]. This is a "
     "draft that will undergo human legal review."
@@ -53,6 +53,24 @@ class BedrockDocumentService:
 
     def _put_object(self, **kwargs) -> dict[str, Any]:
         return self._s3_client().put_object(**kwargs)
+
+    def complete(self, system: str, user: str, max_tokens: int = 4000) -> str:
+        """One Converse call with a system prompt; returns the text."""
+        kwargs: dict[str, Any] = {
+            "modelId": self.settings.bedrock_model_id,
+            "system": [{"text": system}],
+            "messages": [{"role": "user", "content": [{"text": user}]}],
+            "inferenceConfig": {"maxTokens": max_tokens},
+        }
+        if self.settings.bedrock_guardrail_id:
+            kwargs["guardrailConfig"] = {
+                "guardrailIdentifier": self.settings.bedrock_guardrail_id,
+                "guardrailVersion": self.settings.bedrock_guardrail_version,
+            }
+        text = self._extract_text(self._converse(**kwargs))
+        if not text:
+            raise RuntimeError("The model returned no text.")
+        return text
 
     # --- Prompt construction ------------------------------------------------
 

@@ -112,7 +112,8 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
         Resource = [
           var.documents_bucket_arn,
           "${var.documents_bucket_arn}/documents/*",
-          "${var.documents_bucket_arn}/templates/*"
+          "${var.documents_bucket_arn}/templates/*",
+          "${var.documents_bucket_arn}/kb/*"
         ]
       },
       {

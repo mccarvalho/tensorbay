@@ -92,7 +92,25 @@ function clearAndRedirect(): void {
   window.location.assign('/login');
 }
 
+/** Download a file (e.g. a generated DOCX) with the signed-in user's token. */
+async function download(path: string, retried = false): Promise<{ blob: Blob; filename: string }> {
+  const session = getSession();
+  const resp = await fetch(`${config.apiBaseUrl}${path}`, {
+    headers: session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {},
+    cache: 'no-store',
+  });
+  if (resp.status === 401 && !retried && (await refreshOnce())) return download(path, true);
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try { detail = JSON.stringify((await resp.json()).detail ?? detail); } catch { /* not JSON */ }
+    throw new ApiError(resp.status, detail, null);
+  }
+  const match = /filename="([^"]+)"/.exec(resp.headers.get('Content-Disposition') ?? '');
+  return { blob: await resp.blob(), filename: match?.[1] ?? 'document.docx' };
+}
+
 export const api = {
+  download,
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, payload?: unknown) => request<T>('POST', path, payload),
   put: <T>(path: string, payload?: unknown) => request<T>('PUT', path, payload),

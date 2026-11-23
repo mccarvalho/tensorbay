@@ -16,6 +16,7 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import DealDocuments from '../components/DealDocuments';
 import { STAGE_LABEL, STAGE_TONE, type SalesStage } from '../salesStages';
 
 type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
@@ -136,6 +137,8 @@ export default function OpportunityDetail() {
           ))
         )}
       </section>
+
+      <DealDocuments opportunityId={o.id} />
     </div>
   );
 }

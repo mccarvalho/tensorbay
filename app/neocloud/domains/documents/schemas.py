@@ -35,6 +35,15 @@ class GeneratedDocumentResponse(BaseModel):
     s3_key: str | None
     model_id: str
     prompt_summary: str | None
+    opportunity_id: str | None = None
+    version: int = 1
+    file_name: str | None = None
+    docx_s3_key: str | None = None
+    notes: str | None = None
+    error: str | None = None
+    drive_file_id: str | None = None
+    drive_url: str | None = None
+    drive_error: str | None = None
     tenant_id: str | None
     created_at: datetime
     updated_at: datetime
@@ -76,3 +85,10 @@ class DocumentTemplateResponse(BaseModel):
     updated_at: datetime
     created_by: str | None
     updated_by: str | None
+
+
+class GenerateForOpportunityRequest(BaseModel):
+    opportunity_id: str
+    doc_type: DocType
+    # Extra instructions from the person generating (e.g. "escrow agent: JPMorgan").
+    notes: str | None = Field(default=None, max_length=4000)

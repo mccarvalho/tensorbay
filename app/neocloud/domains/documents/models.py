@@ -8,7 +8,7 @@ audit trail applies to every status change).
 
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Enum, String, Text
+from sqlalchemy import Boolean, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from neocloud.db.base import AuditMixin, Base, TenantMixin, UUIDMixin
@@ -19,9 +19,17 @@ class DocType(StrEnum):
     LOI = "LOI"
     PROPOSAL = "PROPOSAL"
     CONTRACT = "CONTRACT"
+    # TensorBay deal documents (generated from an opportunity)
+    ORDER_FORM = "ORDER_FORM"
+    NDA = "NDA"
+    POC_AGREEMENT = "POC_AGREEMENT"
+    ESCROW_AGREEMENT = "ESCROW_AGREEMENT"
+    ACCEPTANCE_NOTICE = "ACCEPTANCE_NOTICE"
 
 
 class DocumentStatus(StrEnum):
+    GENERATING = "GENERATING"  # background job running
+    FAILED = "FAILED"
     DRAFT = "DRAFT"
     GENERATED = "GENERATED"
     UNDER_REVIEW = "UNDER_REVIEW"
@@ -52,6 +60,16 @@ class GeneratedDocument(Base, UUIDMixin, AuditMixin, TenantMixin):
     s3_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     model_id: Mapped[str] = mapped_column(String(255), nullable=False)
     prompt_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Deal documents: one row per generated version of a document type.
+    opportunity_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    docx_s3_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    drive_file_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    drive_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    drive_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class DocumentTemplate(Base, UUIDMixin, AuditMixin):

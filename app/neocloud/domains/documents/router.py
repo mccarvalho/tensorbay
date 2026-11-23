@@ -19,7 +19,10 @@ Generated legal documents always start as GENERATED drafts and require an
 explicit human approve/reject action.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import asyncio
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +44,10 @@ from neocloud.domains.documents.schemas import (
     GeneratedDocumentResponse,
     GeneratedDocumentWithContent,
     GenerateDocumentRequest,
+    GenerateForOpportunityRequest,
 )
+from neocloud.domains.documents import deal as deal_service, generator
+from neocloud.domains.sales.models import Opportunity
 from neocloud.domains.documents.service import BedrockDocumentService
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -303,6 +309,136 @@ async def delete_template(
     await session.delete(template)
 
 
+# --- Deal documents (generated from an opportunity) -------------------------
+
+STALE_AFTER = timedelta(minutes=10)
+
+
+async def _expire_stale(session: AsyncSession, rows: list[GeneratedDocument]) -> None:
+    """A job killed by a deploy would stay GENERATING forever; mark it failed."""
+    now = datetime.now(UTC)
+    for d in rows:
+        created = d.created_at if d.created_at.tzinfo else d.created_at.replace(tzinfo=UTC)
+        if d.status == DocumentStatus.GENERATING and now - created > STALE_AFTER:
+            d.status, d.error = DocumentStatus.FAILED, "Generation was interrupted. Generate it again."
+    await session.flush()
+
+
+@router.post(
+    "/generate-for-opportunity",
+    response_model=GeneratedDocumentResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def generate_for_opportunity(
+    payload: GenerateForOpportunityRequest,
+    background: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(require_permission(Permission.DOCUMENT_GENERATE)),
+) -> GeneratedDocument:
+    """Start generating a deal document. It runs in the background (the model can take a
+    minute); poll ``GET /documents/opportunity/{id}`` for the result."""
+    if payload.doc_type.value not in generator.TYPE_FOLDER:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported document type")
+    try:
+        opp, customer, _c, _q = await deal_service.load_deal(session, payload.opportunity_id)
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    version = await generator.next_version(session, opp.id, payload.doc_type)
+    document = GeneratedDocument(
+        doc_type=payload.doc_type,
+        customer_id=customer.id,
+        opportunity_id=opp.id,
+        version=version,
+        title=f"{generator.TYPE_TITLE[payload.doc_type.value]} - {customer.legal_name}",
+        file_name=generator.file_name_for(payload.doc_type.value, customer.legal_name, version),
+        notes=payload.notes,
+        status=DocumentStatus.GENERATING,
+        model_id=get_settings().bedrock_model_id,
+        prompt_summary=f"doc_type={payload.doc_type.value}; opportunity={opp.id}; v{version}",
+        tenant_id=user.tenant_id,
+        created_by=user.subject,
+        updated_by=user.subject,
+    )
+    session.add(document)
+    await session.flush()
+    await record_audit(
+        session, action="generate", entity_type="GeneratedDocument", entity_id=document.id, actor=user.subject,
+        new_value={"doc_type": payload.doc_type.value, "opportunity_id": opp.id, "version": version},
+    )
+    # Runs after the response is sent, i.e. after this request's transaction committed.
+    background.add_task(generator.run_generation, document.id)
+    return document
+
+
+@router.get("/opportunity/{opportunity_id}", response_model=list[GeneratedDocumentResponse])
+async def list_for_opportunity(
+    opportunity_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: CurrentUser = Depends(require_permission(Permission.CONTRACT_READ)),
+) -> list[GeneratedDocument]:
+    rows = list(
+        (
+            await session.execute(
+                select(GeneratedDocument)
+                .where(GeneratedDocument.opportunity_id == opportunity_id)
+                .order_by(GeneratedDocument.created_at.desc())
+            )
+        ).scalars().all()
+    )
+    await _expire_stale(session, rows)
+    return rows
+
+
+async def _docx_bytes(document: GeneratedDocument) -> bytes:
+    settings = get_settings()
+    if not document.docx_s3_key or not settings.documents_bucket:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This document has no file yet")
+    svc = BedrockDocumentService(settings)
+    obj = await asyncio.to_thread(
+        svc._s3_client().get_object, Bucket=settings.documents_bucket, Key=document.docx_s3_key
+    )
+    return await asyncio.to_thread(obj["Body"].read)
+
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: CurrentUser = Depends(require_permission(Permission.CONTRACT_READ)),
+) -> Response:
+    document = await session.get(GeneratedDocument, document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    data = await _docx_bytes(document)
+    name = (document.file_name or "document.docx").replace('"', "")
+    return Response(
+        content=data,
+        media_type=generator.DOCX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.post("/{document_id}/save-to-drive", response_model=GeneratedDocumentResponse)
+async def save_document_to_drive(
+    document_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(require_permission(Permission.DOCUMENT_GENERATE)),
+) -> GeneratedDocument:
+    """Retry filing a generated document in Google Drive (e.g. after reconnecting)."""
+    document = await session.get(GeneratedDocument, document_id)
+    if document is None or document.opportunity_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    data = await _docx_bytes(document)
+    await generator.save_to_drive(session, get_settings(), document, data, user.subject)
+    await record_audit(
+        session, action="save_to_drive", entity_type="GeneratedDocument", entity_id=document.id, actor=user.subject,
+        new_value={"drive_url": document.drive_url, "drive_error": document.drive_error},
+    )
+    await session.flush()
+    await session.refresh(document)
+    return document
+
+
 # --- Generated documents: read + approval workflow --------------------------
 
 
@@ -332,6 +468,8 @@ async def _transition_status(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
+    if document.status in (DocumentStatus.GENERATING, DocumentStatus.FAILED):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only a generated document can be approved or rejected")
     old_status = document.status
     document.status = new_status
     document.updated_by = user.subject

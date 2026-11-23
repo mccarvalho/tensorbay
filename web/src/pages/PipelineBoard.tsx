@@ -166,6 +166,7 @@ export default function PipelineBoard({
         <div className="flex flex-wrap items-center gap-1.5">
           <Link to={`/opportunities/${o.id}`} className="btn-ghost px-2 py-0.5 text-xs">View</Link>
           <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => onQuotes(o)}>Quotes</button>
+          <Link to={`/opportunities/${o.id}#documents`} className="btn-ghost px-2 py-0.5 text-xs">Documents</Link>
           {canWrite && (
             <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => onEdit(o)}>Edit</button>
           )}

@@ -129,16 +129,16 @@ export default function PipelineBoard({
           setDragId(o.id);
         }}
         onDragEnd={() => { dragRef.current = null; setDragId(null); setOver(null); }}
-        className={`card flex flex-col gap-2 p-3 ${canWrite ? 'cursor-grab active:cursor-grabbing' : ''} ${
+        className={`card flex min-w-0 flex-col gap-2 overflow-hidden p-3 ${canWrite ? 'cursor-grab active:cursor-grabbing' : ''} ${
           dragId === o.id ? 'opacity-40' : ''
         } ${busyId === o.id ? 'animate-pulse' : ''}`}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="font-semibold leading-snug text-white">{customerName(o.customer_id)}</span>
-          <Badge tone="grape">{o.gpu_model}</Badge>
+          <span className="min-w-0 break-words font-semibold leading-snug text-white">{customerName(o.customer_id)}</span>
+          <span className="max-w-[55%] shrink-0 truncate" title={o.gpu_model}><Badge tone="grape">{o.gpu_model}</Badge></span>
         </div>
-        {o.short_name && <div className="-mt-1 text-sm text-cyan">{o.short_name}</div>}
-        <div className="text-xs text-grape-soft">
+        {o.short_name && <div className="-mt-1 break-words text-sm text-cyan">{o.short_name}</div>}
+        <div className="break-words text-xs text-grape-soft">
           {o.quantity.toLocaleString('en-US')} GPUs{o.region ? ` · ${o.region}` : ''} · {o.duration_months} mo
         </div>
         <div className="flex items-center justify-between text-sm">
@@ -146,10 +146,10 @@ export default function PipelineBoard({
           <span className="text-xs text-grape-soft">{o.probability}%</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span title={STAGE_HINT[o.sales_stage as SalesStage] ?? ''}>
+          <span className="max-w-full truncate" title={STAGE_HINT[o.sales_stage as SalesStage] ?? stageLabel(o.sales_stage)}>
             <Badge tone={STAGE_TONE[o.sales_stage as SalesStage] ?? 'neutral'}>{stageLabel(o.sales_stage)}</Badge>
           </span>
-          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-grape-soft">{o.commercial_model}</span>
+          <span className="max-w-full truncate rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-grape-soft" title={o.commercial_model}>{o.commercial_model}</span>
           <span className={`rounded-full border px-2 py-0.5 text-[11px] ${noEscrow ? 'border-white/10 text-grape-soft' : 'border-cyan/40 text-cyan'}`}>
             {noEscrow ? 'No escrow' : 'Escrow'}
           </span>

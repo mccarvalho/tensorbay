@@ -49,6 +49,10 @@ for (const w of [1280, 1600, 2000]) {
               out.push(`${id}: <${el.tagName.toLowerCase()}> "${(el.textContent ?? '').slice(0, 40)}" spills ${Math.round(r.right - cr.right)}px`);
           }
         }
+        for (const k of document.querySelectorAll<HTMLElement>('.card-glow')) {
+          if (k.scrollWidth > k.clientWidth + 1) out.push(`KPI "${k.textContent?.slice(0, 30)}" overflows ${k.scrollWidth - k.clientWidth}px`);
+          for (const v of k.querySelectorAll<HTMLElement>('span')) if (v.scrollWidth > v.clientWidth + 1) out.push(`KPI value "${v.textContent?.slice(0, 20)}" clipped`);
+        }
         return out;
       }, ids);
       await page.screenshot({ path: `/tmp/card-fit-${w}.png` });

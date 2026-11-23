@@ -27,9 +27,9 @@ const ACCENT_TEXT: Record<NonNullable<KpiCardProps['accent']>, string> = {
 
 export function KpiCard({ label, value, sub, accent = 'white' }: KpiCardProps): ReactElement {
   return (
-    <div className="card-glow flex flex-col gap-1">
+    <div className="card-glow flex min-w-0 flex-col gap-1">
       <span className="label">{label}</span>
-      <span className={`text-3xl font-extrabold tracking-tight md:text-4xl ${ACCENT_TEXT[accent]}`}>
+      <span className={`min-w-0 break-words text-3xl font-extrabold tracking-tight md:text-4xl ${ACCENT_TEXT[accent]}`}>
         {value}
       </span>
       {sub !== undefined && sub !== null && (

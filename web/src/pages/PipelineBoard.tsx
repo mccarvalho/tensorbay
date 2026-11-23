@@ -134,7 +134,7 @@ export default function PipelineBoard({
         } ${busyId === o.id ? 'animate-pulse' : ''}`}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="min-w-0 break-words font-semibold leading-snug text-white">{customerName(o.customer_id)}</span>
+          <span className="min-w-0 break-words text-sm font-semibold leading-snug text-white">{customerName(o.customer_id)}</span>
           <span className="max-w-[55%] shrink-0 truncate" title={o.gpu_model}><Badge tone="grape">{o.gpu_model}</Badge></span>
         </div>
         {o.short_name && <div className="-mt-1 break-words text-sm text-cyan">{o.short_name}</div>}

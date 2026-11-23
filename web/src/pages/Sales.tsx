@@ -1,6 +1,6 @@
 // Sales Pipeline — EPIC D / plan §9.
 // Funnel: Opportunity -> Capacity Check -> Quote (with line items).
-import { useMemo, useState, useEffect, useRef, type FormEvent } from 'react';
+import { useMemo, useState, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
@@ -158,6 +158,13 @@ const AVAIL_TONE: Record<AvailabilityStatus, BadgeTone> = {
   PARTIALLY_AVAILABLE: 'warning',
   UNAVAILABLE: 'flamingo',
 };
+
+/** $197.5M style, for KPI cards where the full figure would not fit. */
+const moneyShort = (v: number): ReactNode => (
+  <span title={money(v)}>
+    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(v)}
+  </span>
+);
 
 const money = (v: string | number | null | undefined): string => {
   const n = typeof v === 'string' ? Number(v) : (v ?? 0);
@@ -470,9 +477,9 @@ export default function Sales() {
       {/* Pipeline KPIs */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiCard label="Open Opportunities" value={num(kpis.openCount)} accent="white" />
-        <KpiCard label="Open Pipeline MRR" value={money(kpis.openMrr)} accent="cyan" />
-        <KpiCard label="Weighted MRR" value={money(kpis.weighted)} accent="grape" sub="by probability" />
-        <KpiCard label="Active Contract MRR" value={money(kpis.wonMrr)} accent="white" />
+        <KpiCard label="Open Pipeline MRR" value={moneyShort(kpis.openMrr)} accent="cyan" />
+        <KpiCard label="Weighted MRR" value={moneyShort(kpis.weighted)} accent="grape" sub="by probability" />
+        <KpiCard label="Active Contract MRR" value={moneyShort(kpis.wonMrr)} accent="white" />
         <KpiCard label="Pipeline GPU Demand" value={num(kpis.gpuDemand)} accent="flamingo" sub="open opps" />
       </div>
 

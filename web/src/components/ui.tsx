@@ -29,7 +29,7 @@ export function KpiCard({ label, value, sub, accent = 'white' }: KpiCardProps): 
   return (
     <div className="card-glow flex min-w-0 flex-col gap-1">
       <span className="label">{label}</span>
-      <span className={`min-w-0 break-words text-3xl font-extrabold tracking-tight md:text-4xl ${ACCENT_TEXT[accent]}`}>
+      <span className={`min-w-0 break-words text-2xl font-extrabold tracking-tight md:text-3xl 2xl:text-4xl ${ACCENT_TEXT[accent]}`}>
         {value}
       </span>
       {sub !== undefined && sub !== null && (

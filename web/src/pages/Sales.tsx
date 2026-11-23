@@ -161,7 +161,7 @@ const AVAIL_TONE: Record<AvailabilityStatus, BadgeTone> = {
 
 /** $197.5M style, for KPI cards where the full figure would not fit. */
 const moneyShort = (v: number): ReactNode => (
-  <span title={money(v)}>
+  <span className="whitespace-nowrap" title={money(v)}>
     {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(v)}
   </span>
 );

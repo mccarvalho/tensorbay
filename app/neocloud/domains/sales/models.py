@@ -8,51 +8,81 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from neocloud.db.base import AuditMixin, Base, TenantMixin, UUIDMixin
 
 
 class SalesStage(StrEnum):
-    """Deal phases, in funnel order.
+    """Deal substages, in funnel order.
 
-    Mirrors the TensorBay sales motion: proposal -> optional paid PoC -> contract
-    review (MSA, Order Form, escrow agreement) -> signed with KYC + escrow deposit
-    -> delivery -> 5-day acceptance -> WON once accepted and the escrow releases.
-    ``NEGOTIATION`` is shown as "Contract review"; the code is kept so existing
-    deals need no data migration. Only WON counts for commissions.
+    The pipeline has five macro stages (see ``MACRO_STAGES``), each owned by a
+    department; a deal stores only its substage and the macro stage is derived.
+    ON_HOLD and LOST sit outside the flow. WON ("Won · Live/Billing") is the
+    commission trigger. The escrow substages are skipped on deals with
+    ``escrow_required = False``.
     """
 
-    PROSPECTING = "PROSPECTING"
-    QUALIFICATION = "QUALIFICATION"
-    PROPOSAL = "PROPOSAL"
+    # 1. Lead
+    NEW_LEAD = "NEW_LEAD"
+    CONTACTED = "CONTACTED"
+    INTRO_CALL = "INTRO_CALL"
+    PROPOSAL_SENT = "PROPOSAL_SENT"
     POC = "POC"
-    NEGOTIATION = "NEGOTIATION"  # "Contract review"
-    SIGNED = "SIGNED"  # Order Form signed; KYC + escrow deposit
-    DELIVERY = "DELIVERY"
-    ACCEPTANCE = "ACCEPTANCE"
-    WON = "WON"
+    # 2. KYC & Contracts
+    KYC_SCREENING = "KYC_SCREENING"
+    DOCS_SENT = "DOCS_SENT"  # MSA / Order Form sent
+    UNDER_REVIEW = "UNDER_REVIEW"
+    SIGNED = "SIGNED"
+    # 3. Payment
+    ESCROW_SETUP = "ESCROW_SETUP"
+    AWAITING_DEPOSIT = "AWAITING_DEPOSIT"
+    ESCROW_FUNDED = "ESCROW_FUNDED"
+    # 4. Deployment
+    PROVISIONING = "PROVISIONING"
+    READY_FOR_TESTING = "READY_FOR_TESTING"
+    ACCEPTANCE_TESTING = "ACCEPTANCE_TESTING"
+    ACCEPTED = "ACCEPTED"
+    # 5. Active Contract
+    WON = "WON"  # Live / Billing
+    SUPPORT_SLA = "SUPPORT_SLA"
+    RENEWAL = "RENEWAL"
+    # Outside the flow
+    ON_HOLD = "ON_HOLD"
     LOST = "LOST"
 
 
-# Still being worked: everything except the two closed outcomes.
+S = SalesStage
+
+# macro stage -> (name, owning department, substages)
+MACRO_STAGES: dict[int, tuple[str, str, tuple[SalesStage, ...]]] = {
+    1: ("Lead", "Commercial - Sales & Partnerships", (S.NEW_LEAD, S.CONTACTED, S.INTRO_CALL, S.PROPOSAL_SENT, S.POC)),
+    2: ("KYC & Contracts", "Legal & Compliance", (S.KYC_SCREENING, S.DOCS_SENT, S.UNDER_REVIEW, S.SIGNED)),
+    3: ("Payment", "Finance", (S.ESCROW_SETUP, S.AWAITING_DEPOSIT, S.ESCROW_FUNDED)),
+    4: ("Deployment", "Technical Operations", (S.PROVISIONING, S.READY_FOR_TESTING, S.ACCEPTANCE_TESTING, S.ACCEPTED)),
+    5: ("Active Contract", "Customer Success", (S.WON, S.SUPPORT_SLA, S.RENEWAL)),
+}
+
+ESCROW_STAGES: tuple[SalesStage, ...] = (S.ESCROW_SETUP, S.AWAITING_DEPOSIT, S.ESCROW_FUNDED)
+
+# Stages of a signed, running contract: these count for commissions.
+ACTIVE_STAGES: tuple[SalesStage, ...] = MACRO_STAGES[5][2]
+
+# Still being worked: everything except active contracts, on hold and lost.
 OPEN_STAGES: tuple[SalesStage, ...] = tuple(
-    s for s in SalesStage if s not in (SalesStage.WON, SalesStage.LOST)
+    s for s in SalesStage if s not in ACTIVE_STAGES and s not in (S.ON_HOLD, S.LOST)
 )
 
 # Win probability a deal gets when it moves into a stage (editable per deal).
+# ON_HOLD is absent on purpose: putting a deal on hold keeps its probability.
 STAGE_PROBABILITY: dict[SalesStage, int] = {
-    SalesStage.PROSPECTING: 10,
-    SalesStage.QUALIFICATION: 20,
-    SalesStage.PROPOSAL: 35,
-    SalesStage.POC: 50,
-    SalesStage.NEGOTIATION: 60,
-    SalesStage.SIGNED: 80,
-    SalesStage.DELIVERY: 90,
-    SalesStage.ACCEPTANCE: 95,
-    SalesStage.WON: 100,
-    SalesStage.LOST: 0,
+    S.NEW_LEAD: 10, S.CONTACTED: 15, S.INTRO_CALL: 20, S.PROPOSAL_SENT: 35, S.POC: 50,
+    S.KYC_SCREENING: 55, S.DOCS_SENT: 60, S.UNDER_REVIEW: 65, S.SIGNED: 80,
+    S.ESCROW_SETUP: 82, S.AWAITING_DEPOSIT: 85, S.ESCROW_FUNDED: 90,
+    S.PROVISIONING: 90, S.READY_FOR_TESTING: 92, S.ACCEPTANCE_TESTING: 94, S.ACCEPTED: 97,
+    S.WON: 100, S.SUPPORT_SLA: 100, S.RENEWAL: 100,
+    S.LOST: 0,
 }
 
 
@@ -79,8 +109,16 @@ class Opportunity(Base, UUIDMixin, AuditMixin, TenantMixin):
     expected_mrr: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     probability: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sales_stage: Mapped[SalesStage] = mapped_column(
-        String(32), nullable=False, default=SalesStage.PROSPECTING
+        String(32), nullable=False, default=SalesStage.NEW_LEAD
     )
+    # Stage a deal was in before ON_HOLD, so resuming can put it back.
+    stage_before_hold: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Person currently responsible (the department comes from the macro stage).
+    assigned_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    next_action: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # False for deals without an escrow account: the Payment substages are skipped.
+    escrow_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     account_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
     account_owner_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     account_owner_sub: Mapped[str | None] = mapped_column(String(64), nullable=True)

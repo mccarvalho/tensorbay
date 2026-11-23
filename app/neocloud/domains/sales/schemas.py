@@ -23,7 +23,11 @@ class OpportunityBase(BaseModel):
     commercial_model: str
     expected_mrr: Decimal
     probability: int = Field(default=0, ge=0, le=100)
-    sales_stage: SalesStage = SalesStage.PROSPECTING
+    sales_stage: SalesStage = SalesStage.NEW_LEAD
+    region: str | None = Field(default=None, max_length=64)
+    assigned_to: str | None = Field(default=None, max_length=255)
+    next_action: str | None = Field(default=None, max_length=255)
+    escrow_required: bool = True
     account_owner: str | None = None
     account_owner_email: str | None = None
     account_owner_sub: str | None = None
@@ -45,9 +49,23 @@ class OpportunityUpdate(BaseModel):
     expected_mrr: Decimal | None = None
     probability: int | None = Field(default=None, ge=0, le=100)
     sales_stage: SalesStage | None = None
+    region: str | None = Field(default=None, max_length=64)
+    assigned_to: str | None = Field(default=None, max_length=255)
+    next_action: str | None = Field(default=None, max_length=255)
+    escrow_required: bool | None = None
     account_owner: str | None = None
     account_owner_email: str | None = None
     account_owner_sub: str | None = None
+
+
+class InventoryLane(BaseModel):
+    gpu_model: str
+    physical: int
+    allocated: int
+    reserved: int
+    available: int
+    incoming: int
+    open_demand: int
 
 
 class OpportunityRead(OpportunityBase):
@@ -55,6 +73,7 @@ class OpportunityRead(OpportunityBase):
 
     id: str
     tenant_id: str | None = None
+    stage_before_hold: str | None = None
     created_at: datetime
     updated_at: datetime
 

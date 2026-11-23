@@ -54,7 +54,7 @@ from neocloud.domains.economics.schemas import (
     SalesRepUpdate,
     StatementMarkPaid,
 )
-from neocloud.domains.sales.models import Opportunity
+from neocloud.domains.sales.models import ACTIVE_STAGES, Opportunity
 
 logger = get_logger(__name__)
 
@@ -440,9 +440,9 @@ async def create_deal_from_opportunity(
     opp = await session.get(Opportunity, payload.opportunity_id)
     if opp is None:
         raise HTTPException(status_code=404, detail="Opportunity not found")
-    if opp.sales_stage != "WON":
+    if opp.sales_stage not in {st.value for st in ACTIVE_STAGES}:
         raise HTTPException(
-            status_code=400, detail="Only WON opportunities can become commission deals"
+            status_code=400, detail="Only opportunities with an active contract can become commission deals"
         )
     from datetime import date as _date
 

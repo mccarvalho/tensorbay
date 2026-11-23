@@ -590,7 +590,7 @@ async def convert_lead(
             commercial_model=str(payload.commercial_model),
             expected_mrr=payload.expected_mrr,
             probability=10,
-            sales_stage=SalesStage.PROSPECTING,
+            sales_stage=SalesStage.NEW_LEAD,
             account_owner=rep.name if rep else None,
             account_owner_email=rep.email if rep else None,
             account_owner_sub=rep.cognito_sub if rep else None,

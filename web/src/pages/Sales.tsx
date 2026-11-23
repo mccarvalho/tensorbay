@@ -8,8 +8,11 @@ import { useToast, errMessage } from '../components/toast';
 import { decodeClaims, getSession } from '../auth';
 import { GPU_MODELS, COMMERCIAL_MODELS } from '../constants';
 import { hasPermission } from '../permissions';
-import PipelineBoard from './PipelineBoard';
-import { SALES_STAGES, STAGE_LABEL, STAGE_HINT, STAGE_PROBABILITY, STAGE_TONE, type SalesStage } from '../salesStages';
+import PipelineBoard, { type InventoryLane } from './PipelineBoard';
+import {
+  ACTIVE_STAGES, ESCROW_STAGES, MACRO_STAGES, STAGE_LABEL, STAGE_HINT, STAGE_PROBABILITY, STAGE_TONE,
+  isOpenStage, macroOf, type MacroStage, type SalesStage,
+} from '../salesStages';
 import {
   KpiCard,
   SectionHeader,
@@ -68,6 +71,10 @@ interface Opportunity {
   account_owner: string | null;
   account_owner_email: string | null;
   account_owner_sub: string | null;
+  region: string | null;
+  assigned_to: string | null;
+  next_action: string | null;
+  escrow_required: boolean;
 }
 
 interface OpportunityInput {
@@ -84,6 +91,10 @@ interface OpportunityInput {
   account_owner: string | null;
   account_owner_email: string | null;
   account_owner_sub: string | null;
+  region: string;
+  assigned_to: string;
+  next_action: string;
+  escrow_required: boolean;
 }
 
 interface QuoteItem {
@@ -163,7 +174,10 @@ function driveFolder(createdAt: string | undefined, shortName: string, gpuModel:
   return `${ym}-${label.replace(/\s*[\\/]+\s*/g, ' - ').replace(/\s+/g, ' ')}`;
 }
 
-function emptyOpportunity(stage: SalesStage = 'PROSPECTING'): OpportunityInput {
+/** Default win probability for a stage; ON_HOLD has none (a hold keeps the current one). */
+const stageProb = (s: SalesStage, current = 0): number => (s === 'ON_HOLD' ? current : STAGE_PROBABILITY[s]);
+
+function emptyOpportunity(stage: SalesStage = 'NEW_LEAD'): OpportunityInput {
   return {
     customer_id: '',
     short_name: '',
@@ -173,11 +187,15 @@ function emptyOpportunity(stage: SalesStage = 'PROSPECTING'): OpportunityInput {
     duration_months: 12,
     commercial_model: 'GPU_MONTHLY',
     expected_mrr: 0,
-    probability: STAGE_PROBABILITY[stage],
+    probability: stageProb(stage),
     sales_stage: stage,
     account_owner: currentUserOwner().name,
     account_owner_email: currentUserOwner().email,
     account_owner_sub: currentUserOwner().sub,
+    region: '',
+    assigned_to: '',
+    next_action: '',
+    escrow_required: true,
   };
 }
 
@@ -198,15 +216,24 @@ export default function Sales() {
   const [search, setSearch] = useState('');
   const canWrite = hasPermission('customer.write');
   // Board (Kanban) is the default; the choice is remembered per browser.
-  const [view, setViewState] = useState<'board' | 'table'>(
-    () => (localStorage.getItem('neocloud.pipeline.view') === 'table' ? 'table' : 'board'),
-  );
-  const setView = (v: 'board' | 'table') => { localStorage.setItem('neocloud.pipeline.view', v); setViewState(v); };
+  type View = 'board' | 'inventory' | 'table';
+  const [view, setViewState] = useState<View>(() => {
+    const v = localStorage.getItem('neocloud.pipeline.view');
+    return v === 'table' || v === 'inventory' ? v : 'board';
+  });
+  const setView = (v: View) => { localStorage.setItem('neocloud.pipeline.view', v); setViewState(v); };
+  const [macroFilter, setMacroFilter] = useState<MacroStage['key'] | 'ON_HOLD' | 'LOST' | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
 
   const oppsQuery = useQuery({
     queryKey: ['opportunities'],
     queryFn: () => api.get<Opportunity[]>('/v1/sales/opportunities?limit=200'),
+  });
+
+  const lanesQuery = useQuery({
+    queryKey: ['inventory-lanes'],
+    queryFn: () => api.get<InventoryLane[]>('/v1/sales/inventory-lanes'),
+    enabled: view === 'inventory',
   });
 
   const customersQuery = useQuery({
@@ -239,7 +266,7 @@ export default function Sales() {
     onError: (e) => toast.error(errMessage(e, 'Could not update opportunity')),
   });
 
-  function openCreate(stage: SalesStage = 'PROSPECTING') {
+  function openCreate(stage: SalesStage = 'NEW_LEAD') {
     setEditing(null);
     setForm(emptyOpportunity(stage));
     setOppModalOpen(true);
@@ -264,14 +291,22 @@ export default function Sales() {
       toast.error(errMessage(e, 'Could not move the deal'));
     },
     onSuccess: (_d, { stage }) => toast.success(`Moved to ${STAGE_LABEL[stage]}`),
-    onSettled: () => { setMovingId(null); qc.invalidateQueries({ queryKey: ['opportunities'] }); },
+    onSettled: () => {
+      setMovingId(null);
+      qc.invalidateQueries({ queryKey: ['opportunities'] });
+      qc.invalidateQueries({ queryKey: ['inventory-lanes'] });
+    },
   });
 
   function moveDeal(o: Opportunity, stage: SalesStage) {
     const who = customerName(o.customer_id);
-    if (stage === 'WON' && !confirm(`Mark the ${who} deal as WON?`)) return;
+    if (o.escrow_required === false && ESCROW_STAGES.includes(stage)) {
+      toast.error(`${who} has no escrow account, so the Payment substages do not apply. Edit the deal to turn escrow on.`);
+      return;
+    }
+    if (stage === 'WON' && !confirm(`Mark the ${who} deal as WON (live and billing)? It then counts for commissions.`)) return;
     if (stage === 'LOST' && !confirm(`Mark the ${who} deal as LOST?`)) return;
-    if (o.sales_stage === 'WON' && !confirm(`${who} was marked WON. Move it back to ${stage}?`)) return;
+    if (ACTIVE_STAGES.includes(o.sales_stage) && !ACTIVE_STAGES.includes(stage) && !confirm(`${who} is an active contract. Move it to ${STAGE_LABEL[stage]}?`)) return;
     moveMut.mutate({ id: o.id, stage });
   }
 
@@ -291,6 +326,10 @@ export default function Sales() {
       account_owner: o.account_owner,
       account_owner_email: o.account_owner_email,
       account_owner_sub: o.account_owner_sub,
+      region: o.region ?? '',
+      assigned_to: o.assigned_to ?? '',
+      next_action: o.next_action ?? '',
+      escrow_required: o.escrow_required ?? true,
     });
     setOppModalOpen(true);
   }
@@ -304,7 +343,8 @@ export default function Sales() {
   function submitOpp(e: FormEvent) {
     e.preventDefault();
     // An empty short name is stored as "none" (the folder then uses <model>-<qty>).
-    const payload = { ...form, short_name: (form.short_name.trim() || null) as unknown as string };
+    const blank = (v: string) => (v.trim() || null) as unknown as string;
+    const payload = { ...form, short_name: blank(form.short_name), region: blank(form.region), assigned_to: blank(form.assigned_to), next_action: blank(form.next_action) };
     if (editing) updateMut.mutate({ id: editing.id, payload });
     else createMut.mutate(payload);
   }
@@ -312,19 +352,23 @@ export default function Sales() {
   // Client-side search over the opportunities list.
   const filteredOpps = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const opps = oppsQuery.data ?? [];
+    const opps = (oppsQuery.data ?? []).filter((o) => {
+      if (!macroFilter) return true;
+      if (macroFilter === 'ON_HOLD' || macroFilter === 'LOST') return o.sales_stage === macroFilter;
+      return macroOf(o.sales_stage)?.key === macroFilter;
+    });
     if (!q) return opps;
     return opps.filter((o) =>
-      `${o.gpu_model} ${customerName(o.customer_id)} ${o.sales_stage} ${o.commercial_model} ${o.account_owner ?? ''}`
+      `${o.gpu_model} ${customerName(o.customer_id)} ${o.short_name ?? ''} ${o.region ?? ''} ${STAGE_LABEL[o.sales_stage] ?? o.sales_stage} ${o.commercial_model} ${o.account_owner ?? ''} ${o.assigned_to ?? ''}`
         .toLowerCase().includes(q),
     );
-  }, [oppsQuery.data, search, customersQuery.data]);
+  }, [oppsQuery.data, search, macroFilter, customersQuery.data]);
 
   // Pipeline KPIs (exclude LOST from weighted/open pipeline)
   const kpis = useMemo(() => {
     const opps = oppsQuery.data ?? [];
-    const open = opps.filter((o) => o.sales_stage !== 'WON' && o.sales_stage !== 'LOST');
-    const won = opps.filter((o) => o.sales_stage === 'WON');
+    const open = opps.filter((o) => isOpenStage(o.sales_stage));
+    const won = opps.filter((o) => ACTIVE_STAGES.includes(o.sales_stage));
     const sumMrr = (list: Opportunity[]) => list.reduce((s, o) => s + Number(o.expected_mrr), 0);
     const weighted = open.reduce((s, o) => s + Number(o.expected_mrr) * (o.probability / 100), 0);
     const gpuDemand = open.reduce((s, o) => s + o.quantity, 0);
@@ -337,9 +381,15 @@ export default function Sales() {
     };
   }, [oppsQuery.data]);
 
-  const stageCounts = useMemo(() => {
-    const counts = Object.fromEntries(SALES_STAGES.map((s) => [s, 0])) as Record<SalesStage, number>;
-    for (const o of oppsQuery.data ?? []) counts[o.sales_stage] += 1;
+  // Counts for the filter chips: five macro stages, then On Hold and Lost.
+  const macroCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: 0, ON_HOLD: 0, LOST: 0 };
+    for (const m of MACRO_STAGES) counts[m.key] = 0;
+    for (const o of oppsQuery.data ?? []) {
+      counts.ALL += 1;
+      const key = o.sales_stage === 'ON_HOLD' || o.sales_stage === 'LOST' ? o.sales_stage : macroOf(o.sales_stage)?.key;
+      if (key) counts[key] += 1;
+    }
     return counts;
   }, [oppsQuery.data]);
 
@@ -399,7 +449,7 @@ export default function Sales() {
         />
         <div className="flex items-center gap-3">
           <div className="inline-flex overflow-hidden rounded-xl border border-white/10" role="group" aria-label="Pipeline view">
-            {(['board', 'table'] as const).map((v) => (
+            {(['board', 'inventory', 'table'] as const).map((v) => (
               <button
                 key={v}
                 type="button"
@@ -407,7 +457,7 @@ export default function Sales() {
                 onClick={() => setView(v)}
                 className={`px-3 py-1.5 text-sm ${view === v ? 'bg-white/10 text-white' : 'text-grape-soft hover:text-white'}`}
               >
-                {v === 'board' ? 'Board' : 'Table'}
+                {v === 'board' ? 'Pipeline (Stage)' : v === 'inventory' ? 'Inventory (GPU)' : 'Table'}
               </button>
             ))}
           </div>
@@ -422,17 +472,29 @@ export default function Sales() {
         <KpiCard label="Open Opportunities" value={num(kpis.openCount)} accent="white" />
         <KpiCard label="Open Pipeline MRR" value={money(kpis.openMrr)} accent="cyan" />
         <KpiCard label="Weighted MRR" value={money(kpis.weighted)} accent="grape" sub="by probability" />
-        <KpiCard label="Won MRR" value={money(kpis.wonMrr)} accent="white" />
+        <KpiCard label="Active Contract MRR" value={money(kpis.wonMrr)} accent="white" />
         <KpiCard label="Pipeline GPU Demand" value={num(kpis.gpuDemand)} accent="flamingo" sub="open opps" />
       </div>
 
-      {/* Stage distribution */}
-      <div className="flex flex-wrap gap-2">
-        {SALES_STAGES.map((s) => (
-          <span key={s} className="flex items-center gap-2">
-            <Badge tone={STAGE_TONE[s]}>{STAGE_LABEL[s]}</Badge>
-            <span className="text-sm text-grape-soft">{stageCounts[s]}</span>
-          </span>
+      {/* Stage filter: five macro stages, then On Hold and Lost */}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by stage">
+        {([
+          { key: null, label: 'All Opportunities', tone: 'neutral' as const, count: macroCounts.ALL },
+          ...MACRO_STAGES.map((m) => ({ key: m.key, label: m.label, tone: m.tone, count: macroCounts[m.key] })),
+          { key: 'ON_HOLD' as const, label: 'On Hold', tone: 'neutral' as const, count: macroCounts.ON_HOLD },
+          { key: 'LOST' as const, label: 'Lost', tone: 'flamingo' as const, count: macroCounts.LOST },
+        ]).map((c) => (
+          <button
+            key={c.key ?? 'ALL'}
+            type="button"
+            data-testid={`filter-${c.key ?? 'ALL'}`}
+            aria-pressed={macroFilter === c.key}
+            onClick={() => setMacroFilter(macroFilter === c.key ? null : c.key)}
+            className={`flex items-center gap-2 rounded-full border px-1.5 py-1 ${macroFilter === c.key ? 'border-cyan' : 'border-transparent'}`}
+          >
+            <Badge tone={c.tone}>{c.label}</Badge>
+            <span className="pr-1 text-sm text-grape-soft">{c.count}</span>
+          </button>
         ))}
       </div>
 
@@ -442,18 +504,19 @@ export default function Sales() {
         <Spinner label="Loading pipeline…" />
       ) : oppsQuery.isError ? (
         <ErrorState error={oppsQuery.error} />
-      ) : view === 'board' ? (
+      ) : view !== 'table' ? (
         <PipelineBoard
-          stages={SALES_STAGES}
-          tones={STAGE_TONE}
+          mode={view === 'inventory' ? 'inventory' : 'stage'}
+          lanes={lanesQuery.data ?? []}
+          macroFilter={macroFilter === 'ON_HOLD' || macroFilter === 'LOST' ? null : macroFilter}
           opportunities={filteredOpps}
           customerName={customerName}
           canWrite={canWrite}
           busyId={movingId}
-          onMove={(o, stage) => moveDeal(o as Opportunity, stage as SalesStage)}
+          onMove={(o, stage) => moveDeal(o as Opportunity, stage)}
           onEdit={(o) => openEdit(o as Opportunity)}
           onQuotes={(o) => setQuotesFor(o as Opportunity)}
-          onAdd={(stage) => openCreate(stage as SalesStage)}
+          onAdd={(stage) => openCreate(stage)}
         />
       ) : (
         <DataTable
@@ -568,10 +631,18 @@ export default function Sales() {
                 onChange={(e) => {
                   // Picking a stage also proposes its default probability (still editable).
                   const st = e.target.value as SalesStage;
-                  setForm({ ...form, sales_stage: st, probability: STAGE_PROBABILITY[st] });
+                  setForm({ ...form, sales_stage: st, probability: stageProb(st, form.probability) });
                 }}
               >
-                {SALES_STAGES.map((s) => <option key={s} value={s} title={STAGE_HINT[s]}>{STAGE_LABEL[s]}</option>)}
+                {MACRO_STAGES.map((m) => (
+                  <optgroup key={m.key} label={`${m.n}. ${m.label}`}>
+                    {m.stages.map((s) => (
+                      <option key={s} value={s} title={STAGE_HINT[s]} disabled={!form.escrow_required && ESCROW_STAGES.includes(s)}>{STAGE_LABEL[s]}</option>
+                    ))}
+                  </optgroup>
+                ))}
+                <option value="ON_HOLD" title={STAGE_HINT.ON_HOLD}>On Hold</option>
+                <option value="LOST" title={STAGE_HINT.LOST}>Lost</option>
               </select>
             </div>
           </div>
@@ -601,6 +672,41 @@ export default function Sales() {
               />
             </div>
           </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="opp_region">Region</label>
+              <input
+                id="opp_region" className="input" maxLength={64} placeholder="Brazil (São Paulo)"
+                value={form.region}
+                onChange={(e) => setForm({ ...form, region: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="opp_assigned">Assigned to (person)</label>
+              <input
+                id="opp_assigned" className="input" maxLength={255} placeholder="Who is responsible now"
+                value={form.assigned_to}
+                onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label" htmlFor="opp_next">Next action</label>
+            <input
+              id="opp_next" className="input" maxLength={255} placeholder="Review MSA & Order Form"
+              value={form.next_action}
+              onChange={(e) => setForm({ ...form, next_action: e.target.value })}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-white">
+            <input
+              type="checkbox" id="opp_escrow"
+              checked={form.escrow_required}
+              onChange={(e) => setForm({ ...form, escrow_required: e.target.checked })}
+            />
+            This deal uses an escrow account (turn off to skip the Payment substages)
+          </label>
 
           {/* Capacity check gate */}
           <CapacityCheckPanel gpuModel={form.gpu_model} quantity={form.quantity} />

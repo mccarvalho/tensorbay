@@ -5,7 +5,7 @@ recorded in the audit trail using the current user's subject as the actor.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,6 +21,40 @@ router = APIRouter(prefix="/sales", tags=["Sales"])
 # --------------------------------------------------------------------------- #
 # Opportunities
 # --------------------------------------------------------------------------- #
+
+
+@router.get("/inventory-lanes", response_model=list[schemas.InventoryLane])
+async def inventory_lanes(
+    session: AsyncSession = Depends(get_session),
+    _: CurrentUser = Depends(require_permission(Permission.CUSTOMER_READ)),
+) -> list[schemas.InventoryLane]:
+    """Per GPU model: stock, committed incoming supply and the demand of open deals.
+
+    Lets sales see whether Procurement can cover a deal before promising it.
+    """
+    from neocloud.domains.capacity import service as capacity_service
+
+    rows = await session.execute(
+        select(models.Opportunity.gpu_model, func.coalesce(func.sum(models.Opportunity.quantity), 0))
+        .where(models.Opportunity.sales_stage.in_([s.value for s in models.OPEN_STAGES]))
+        .group_by(models.Opportunity.gpu_model)
+    )
+    demand = {m: int(q) for m, q in rows.all()}
+    models_seen = set(demand) | set(
+        (await session.execute(select(models.Opportunity.gpu_model).distinct())).scalars().all()
+    )
+    lanes = []
+    for model in sorted(models_seen):
+        ledger = await capacity_service.compute_ledger(session, model)
+        incoming = await capacity_service._incoming_quantity(session, model)
+        lanes.append(
+            schemas.InventoryLane(
+                gpu_model=model, physical=ledger.physical, allocated=ledger.allocated,
+                reserved=ledger.reserved, available=ledger.available, incoming=incoming,
+                open_demand=demand.get(model, 0),
+            )
+        )
+    return lanes
 
 
 @router.get("/opportunities", response_model=list[schemas.OpportunityRead])
@@ -96,8 +130,22 @@ async def update_opportunity(
     # Moving a deal to another stage (e.g. dragging it on the board) resets its
     # probability to that stage's default, unless the caller set one explicitly.
     new_stage = changes.get("sales_stage")
-    if new_stage is not None and new_stage != obj.sales_stage and "probability" not in changes:
-        changes["probability"] = models.STAGE_PROBABILITY[models.SalesStage(new_stage)]
+    escrow = changes.get("escrow_required", obj.escrow_required)
+    if new_stage is not None and new_stage != obj.sales_stage:
+        stage = models.SalesStage(new_stage)
+        if stage in models.ESCROW_STAGES and not escrow:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "This deal has no escrow account; the Payment substages do not apply",
+            )
+        if stage == models.SalesStage.ON_HOLD:
+            # Remember where it was so it can be resumed; keep its probability.
+            changes["stage_before_hold"] = obj.sales_stage
+        else:
+            if obj.sales_stage == models.SalesStage.ON_HOLD:
+                changes["stage_before_hold"] = None
+            if "probability" not in changes:
+                changes["probability"] = models.STAGE_PROBABILITY[stage]
     for field, value in changes.items():
         setattr(obj, field, value)
     obj.updated_by = user.subject

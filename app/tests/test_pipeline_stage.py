@@ -25,8 +25,8 @@ async def _opp(client: AsyncClient) -> dict:
 
 async def test_stage_only_patch_moves_the_deal_and_leaves_everything_else(client: AsyncClient) -> None:
     opp = await _opp(client)
-    assert opp["sales_stage"] == "PROSPECTING"
-    for stage in ("QUALIFICATION", "PROPOSAL", "NEGOTIATION", "WON", "NEGOTIATION", "LOST"):
+    assert opp["sales_stage"] == "NEW_LEAD"
+    for stage in ("INTRO_CALL", "PROPOSAL_SENT", "UNDER_REVIEW", "WON", "UNDER_REVIEW", "LOST"):
         r = await client.patch(f"{V1}/sales/opportunities/{opp['id']}", json={"sales_stage": stage})
         assert r.status_code == 200, r.text
         moved = r.json()
@@ -43,19 +43,19 @@ async def test_unknown_stage_is_rejected_and_nothing_changes(client: AsyncClient
     opp = await _opp(client)
     r = await client.patch(f"{V1}/sales/opportunities/{opp['id']}", json={"sales_stage": "DONE"})
     assert r.status_code == 422
-    assert (await client.get(f"{V1}/sales/opportunities/{opp['id']}")).json()["sales_stage"] == "PROSPECTING"
+    assert (await client.get(f"{V1}/sales/opportunities/{opp['id']}")).json()["sales_stage"] == "NEW_LEAD"
     assert (await client.patch(f"{V1}/sales/opportunities/nope", json={"sales_stage": "WON"})).status_code == 404
 
 
 async def test_each_move_is_audited(client: AsyncClient, session) -> None:
     opp = await _opp(client)
-    await client.patch(f"{V1}/sales/opportunities/{opp['id']}", json={"sales_stage": "PROPOSAL"})
+    await client.patch(f"{V1}/sales/opportunities/{opp['id']}", json={"sales_stage": "PROPOSAL_SENT"})
     rows = (
         await session.execute(
             select(AuditLog).where(AuditLog.entity_id == opp["id"], AuditLog.action == "update")
         )
     ).scalars().all()
-    assert len(rows) == 1 and "PROPOSAL" in str(rows[0].new_value)
+    assert len(rows) == 1 and "PROPOSAL_SENT" in str(rows[0].new_value)
 
 
 async def test_read_only_users_cannot_move_deals(client: AsyncClient) -> None:

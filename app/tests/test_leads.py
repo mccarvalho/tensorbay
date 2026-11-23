@@ -333,7 +333,7 @@ async def test_convert_with_opportunity(client: AsyncClient) -> None:
     opp = (await client.get(f"{V1}/sales/opportunities/{opp_id}")).json()
     assert opp["gpu_model"] == "H100"  # defaulted from the lead's SKU
     assert opp["quantity"] == 32  # defaulted from the lead's GPU count
-    assert opp["sales_stage"] == "PROSPECTING"
+    assert opp["sales_stage"] == "NEW_LEAD"
 
 
 # --------------------------------------------------------------------------- #

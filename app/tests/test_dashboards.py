@@ -113,7 +113,7 @@ async def test_commercial_pipeline(client, session):
             commercial_model="GPU_MONTHLY",
             expected_mrr=410000,
             probability=70,
-            sales_stage=SalesStage.NEGOTIATION,
+            sales_stage=SalesStage.UNDER_REVIEW,
         )
     )
     await session.commit()

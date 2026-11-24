@@ -27,6 +27,7 @@ env:
   CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.PROD_CLOUDFRONT_DISTRIBUTION_ID }}
   VITE_API_BASE_URL: ""
   VITE_ENVIRONMENT: prod
+  VITE_AI_DOCS: "1"
   VITE_COGNITO_DOMAIN: ${{ vars.PROD_COGNITO_DOMAIN }}
   VITE_COGNITO_CLIENT_ID: ${{ vars.PROD_COGNITO_CLIENT_ID }}
   # Redirect/logout URIs are not set: the app derives them from the address it is

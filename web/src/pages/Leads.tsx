@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { decodeClaims, getSession } from '../auth';
 import { hasPermission } from '../permissions';
-import { COMMERCIAL_MODELS } from '../constants';
+import OpportunityFormModal, { type OpportunityInput } from '../components/OpportunityFormModal';
 import { useToast, errMessage } from '../components/toast';
 import {
   SectionHeader,
@@ -337,7 +337,20 @@ function LeadModal({
   const navigate = useNavigate();
   const [notes, setNotes] = useState(lead.notes ?? '');
   const [converting, setConverting] = useState(false);
+  // Customer the "new opportunity" form is open for (set once the lead is a customer).
+  const [oppForCustomer, setOppForCustomer] = useState<string | null>(null);
+  // True when the customer was just created from this lead: go to it once the form closes.
+  const [goToCustomer, setGoToCustomer] = useState(false);
   const closed = lead.status === 'CONVERTED';
+  const where = place(lead);
+  // What the lead already tells us, so the form starts filled in.
+  const oppDefaults: Partial<OpportunityInput> = {
+    short_name: lead.company ?? lead.name,
+    ...(lead.sku_of_interest ? { gpu_model: lead.sku_of_interest } : {}),
+    ...(lead.gpu_count ? { quantity: lead.gpu_count } : {}),
+    ...(where !== '—' ? { region: where } : {}),
+    next_action: 'Follow up with the lead',
+  };
 
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.patch<Lead>(`/v1/leads/${lead.id}`, body),
@@ -392,6 +405,10 @@ function LeadModal({
               {lead.converted_opportunity_id && (
                 <button type="button" className="btn-ghost" onClick={() => navigate(`/opportunities/${lead.converted_opportunity_id}`)}>Open opportunity →</button>
               )}
+              {canWrite && (
+                <button type="button" className="btn-primary" data-testid="lead-add-opportunity"
+                  onClick={() => setOppForCustomer(lead.converted_customer_id)}>+ Add opportunity</button>
+              )}
             </div>
           )}
 
@@ -430,7 +447,13 @@ function LeadModal({
                     <button type="button" className="btn-ghost text-flamingo" onClick={doDisqualify}>Disqualify</button>
                   )}
                 </div>
-                <button type="button" className="btn-primary" onClick={() => setConverting(true)}>Convert to customer</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn-ghost" onClick={() => setConverting(true)}>Convert to customer</button>
+                  {lead.status !== 'DISQUALIFIED' && (
+                    <button type="button" className="btn-primary" data-testid="lead-add-opportunity"
+                      onClick={() => setConverting(true)}>+ Add opportunity</button>
+                  )}
+                </div>
               </div>
             </>
           )}
@@ -441,42 +464,40 @@ function LeadModal({
         <ConvertModal
           lead={lead}
           onClose={() => setConverting(false)}
-          onDone={(r) => {
+          onDone={(r, addOpportunity) => {
             setConverting(false);
             onChanged();
             toast.success(r.customer_created ? 'Customer created' : 'Added to existing customer');
-            navigate(`/customers/${r.customer_id}`);
+            if (addOpportunity) { setGoToCustomer(true); setOppForCustomer(r.customer_id); }
+            else navigate(`/customers/${r.customer_id}`);
           }}
         />
       )}
+
+      <OpportunityFormModal
+        open={oppForCustomer !== null}
+        onClose={() => {
+          // Leave the lead for the customer, whether the deal was saved or skipped.
+          const id = oppForCustomer;
+          setOppForCustomer(null);
+          if (id && goToCustomer) navigate(`/customers/${id}`);
+          setGoToCustomer(false);
+        }}
+        customerId={oppForCustomer ?? undefined}
+        defaults={oppDefaults}
+      />
     </>
   );
 }
 
-function ConvertModal({ lead, onClose, onDone }: { lead: Lead; onClose: () => void; onDone: (r: ConvertResult) => void }) {
+function ConvertModal({ lead, onClose, onDone }: { lead: Lead; onClose: () => void; onDone: (r: ConvertResult, addOpportunity: boolean) => void }) {
   const toast = useToast();
-  const [form, setForm] = useState({
-    customer_name: lead.company ?? lead.name,
-    create_opportunity: false,
-    gpu_model: lead.sku_of_interest ?? '',
-    quantity: lead.gpu_count ? String(lead.gpu_count) : '',
-    duration_months: '12',
-    commercial_model: 'RESERVED',
-    expected_mrr: '',
-  });
+  const [customerName, setCustomerName] = useState(lead.company ?? lead.name);
+  const [addOpportunity, setAddOpportunity] = useState(true);
 
   const convert = useMutation({
-    mutationFn: () =>
-      api.post<ConvertResult>(`/v1/leads/${lead.id}/convert`, {
-        customer_name: form.customer_name || null,
-        create_opportunity: form.create_opportunity,
-        gpu_model: form.create_opportunity ? form.gpu_model || null : null,
-        quantity: form.create_opportunity && form.quantity ? Number(form.quantity) : null,
-        duration_months: form.create_opportunity && form.duration_months ? Number(form.duration_months) : null,
-        commercial_model: form.create_opportunity ? form.commercial_model : null,
-        expected_mrr: form.create_opportunity && form.expected_mrr ? form.expected_mrr : null,
-      }),
-    onSuccess: onDone,
+    mutationFn: () => api.post<ConvertResult>(`/v1/leads/${lead.id}/convert`, { customer_name: customerName || null, create_opportunity: false }),
+    onSuccess: (r) => onDone(r, addOpportunity),
     onError: (e) => toast.error(errMessage(e, 'Could not convert lead')),
   });
 
@@ -489,49 +510,17 @@ function ConvertModal({ lead, onClose, onDone }: { lead: Lead; onClose: () => vo
         </p>
         <div>
           <label className="label" htmlFor="cv_name">Customer name</label>
-          <input id="cv_name" className="input" required value={form.customer_name}
-            onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+          <input id="cv_name" className="input" required value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)} />
         </div>
         <label className="flex items-center gap-2 text-sm text-white">
-          <input type="checkbox" checked={form.create_opportunity}
-            onChange={(e) => setForm({ ...form, create_opportunity: e.target.checked })} />
-          Also create an opportunity
+          <input type="checkbox" id="cv_opp" checked={addOpportunity} onChange={(e) => setAddOpportunity(e.target.checked)} />
+          Then add an opportunity (opens the full form, filled in from the lead)
         </label>
-        {form.create_opportunity && (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label" htmlFor="cv_gpu">GPU model</label>
-              <input id="cv_gpu" className="input" required value={form.gpu_model}
-                onChange={(e) => setForm({ ...form, gpu_model: e.target.value })} />
-            </div>
-            <div>
-              <label className="label" htmlFor="cv_qty">Quantity</label>
-              <input id="cv_qty" className="input" type="number" min="1" required value={form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
-            </div>
-            <div>
-              <label className="label" htmlFor="cv_term">Term (months)</label>
-              <input id="cv_term" className="input" type="number" min="1" required value={form.duration_months}
-                onChange={(e) => setForm({ ...form, duration_months: e.target.value })} />
-            </div>
-            <div>
-              <label className="label" htmlFor="cv_model">Commercial model</label>
-              <select id="cv_model" className="input" value={form.commercial_model}
-                onChange={(e) => setForm({ ...form, commercial_model: e.target.value })}>
-                {COMMERCIAL_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="label" htmlFor="cv_mrr">Expected MRR (USD)</label>
-              <input id="cv_mrr" className="input" type="number" min="0" step="0.01" required value={form.expected_mrr}
-                onChange={(e) => setForm({ ...form, expected_mrr: e.target.value })} />
-            </div>
-          </div>
-        )}
         <div className="mt-2 flex justify-end gap-3">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary" disabled={convert.isPending}>
-            {convert.isPending ? 'Converting…' : 'Convert'}
+            {convert.isPending ? 'Converting…' : addOpportunity ? 'Convert and add opportunity' : 'Convert'}
           </button>
         </div>
       </form>

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { hasPermission } from '../permissions';
+import OpportunityFormModal from '../components/OpportunityFormModal';
 import { useToast, errMessage } from '../components/toast';
 import {
   SectionHeader,
@@ -69,6 +70,7 @@ export default function Customers() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerForm>(emptyForm);
   const [search, setSearch] = useState('');
+  const [oppFor, setOppFor] = useState<string | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['customers'],
@@ -147,6 +149,7 @@ export default function Customers() {
           <Link to={`/customers/${c.id}`} className="btn-ghost px-2.5 py-1 text-xs">Open CRM →</Link>
           {canWrite && (
             <>
+              <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setOppFor(c.id)}>+ Opportunity</button>
               <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => openEdit(c)}>Edit</button>
               <button type="button" className="btn-ghost px-2.5 py-1 text-xs text-flamingo"
                 onClick={() => { if (confirm(`Delete customer ${c.legal_name}?`)) del.mutate(c.id); }}>Delete</button>
@@ -180,6 +183,8 @@ export default function Customers() {
         <DataTable columns={columns} rows={filtered} rowKey={(c) => c.id}
           empty={<EmptyState title={search ? 'No matches' : 'No customers yet'} hint={search ? 'Try a different search.' : 'Add your first account to start building the pipeline.'} />} />
       )}
+
+      <OpportunityFormModal open={oppFor !== null} onClose={() => setOppFor(null)} customerId={oppFor ?? undefined} />
 
       <Modal open={open} onClose={() => { setOpen(false); reset(); }} title={editId ? 'Edit Customer' : 'New Customer'}>
         <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); save.mutate(); }}>

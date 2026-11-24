@@ -1,16 +1,15 @@
 // Sales Pipeline — EPIC D / plan §9.
 // Funnel: Opportunity -> Capacity Check -> Quote (with line items).
-import { useMemo, useState, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { useToast, errMessage } from '../components/toast';
-import { decodeClaims, getSession } from '../auth';
-import { GPU_MODELS, COMMERCIAL_MODELS } from '../constants';
+import OpportunityFormModal, { type Opportunity } from '../components/OpportunityFormModal';
 import { hasPermission } from '../permissions';
 import PipelineBoard, { type InventoryLane } from './PipelineBoard';
 import {
-  ACTIVE_STAGES, ESCROW_STAGES, MACRO_STAGES, STAGE_LABEL, STAGE_HINT, STAGE_PROBABILITY, STAGE_TONE,
+  ACTIVE_STAGES, ESCROW_STAGES, MACRO_STAGES, STAGE_LABEL, STAGE_TONE,
   isOpenStage, macroOf, type MacroStage, type SalesStage,
 } from '../salesStages';
 import {
@@ -33,69 +32,11 @@ import {
 
 type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
 
-type AvailabilityStatus = 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE';
 
 
-/** Signed-in user's identity, for pre-filling the account-owner field. */
-function currentUserOwner(): { name: string | null; email: string | null; sub: string | null } {
-  const session = getSession();
-  if (!session?.idToken) return { name: null, email: null, sub: null };
-  try {
-    const claims = decodeClaims(session.idToken);
-    return {
-      name: claims.name ?? claims.email ?? null,
-      email: claims.email ?? null,
-      sub: claims.sub ?? null,
-    };
-  } catch {
-    return { name: null, email: null, sub: null };
-  }
-}
 
 const QUOTE_STATUSES: QuoteStatus[] = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
 
-interface Opportunity {
-  id: string;
-  customer_id: string;
-  short_name: string | null;
-  created_at: string;
-  gpu_model: string;
-  sku_id: string | null;
-  quantity: number;
-  expected_start: string | null;
-  duration_months: number;
-  commercial_model: string;
-  expected_mrr: string | number;
-  probability: number;
-  sales_stage: SalesStage;
-  account_owner: string | null;
-  account_owner_email: string | null;
-  account_owner_sub: string | null;
-  region: string | null;
-  assigned_to: string | null;
-  next_action: string | null;
-  escrow_required: boolean;
-}
-
-interface OpportunityInput {
-  customer_id: string;
-  short_name: string;
-  gpu_model: string;
-  quantity: number;
-  expected_start: string | null;
-  duration_months: number;
-  commercial_model: string;
-  expected_mrr: number;
-  probability: number;
-  sales_stage: SalesStage;
-  account_owner: string | null;
-  account_owner_email: string | null;
-  account_owner_sub: string | null;
-  region: string;
-  assigned_to: string;
-  next_action: string;
-  escrow_required: boolean;
-}
 
 interface QuoteItem {
   id?: string;
@@ -132,14 +73,6 @@ interface Sku {
   active: boolean;
 }
 
-interface CapacityCheck {
-  gpu_model: string;
-  requested: number;
-  available: number;
-  gap: number;
-  incoming: number;
-  status: AvailabilityStatus;
-}
 
 // --------------------------------------------------------------------------- //
 // Helpers
@@ -151,12 +84,6 @@ const QUOTE_TONE: Record<QuoteStatus, BadgeTone> = {
   ACCEPTED: 'success',
   REJECTED: 'flamingo',
   EXPIRED: 'warning',
-};
-
-const AVAIL_TONE: Record<AvailabilityStatus, BadgeTone> = {
-  AVAILABLE: 'success',
-  PARTIALLY_AVAILABLE: 'warning',
-  UNAVAILABLE: 'flamingo',
 };
 
 /** $197.5M style, for KPI cards where the full figure would not fit. */
@@ -171,40 +98,6 @@ const money = (v: string | number | null | undefined): string => {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 };
 const num = (v: number): string => v.toLocaleString('en-US');
-const today = (): string => new Date().toISOString().slice(0, 10);
-
-/** Mirrors drive.service.opportunity_folder_name: YYYY-MM-<short name> (creation month). */
-function driveFolder(createdAt: string | undefined, shortName: string, gpuModel: string, qty: number): string {
-  const d = createdAt ? new Date(createdAt) : new Date();
-  const label = shortName.trim() || `${gpuModel}-${qty}`;
-  const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-  return `${ym}-${label.replace(/\s*[\\/]+\s*/g, ' - ').replace(/\s+/g, ' ')}`;
-}
-
-/** Default win probability for a stage; ON_HOLD has none (a hold keeps the current one). */
-const stageProb = (s: SalesStage, current = 0): number => (s === 'ON_HOLD' ? current : STAGE_PROBABILITY[s]);
-
-function emptyOpportunity(stage: SalesStage = 'NEW_LEAD'): OpportunityInput {
-  return {
-    customer_id: '',
-    short_name: '',
-    gpu_model: 'H200',
-    quantity: 8,
-    expected_start: today(),
-    duration_months: 12,
-    commercial_model: 'GPU_MONTHLY',
-    expected_mrr: 0,
-    probability: stageProb(stage),
-    sales_stage: stage,
-    account_owner: currentUserOwner().name,
-    account_owner_email: currentUserOwner().email,
-    account_owner_sub: currentUserOwner().sub,
-    region: '',
-    assigned_to: '',
-    next_action: '',
-    escrow_required: true,
-  };
-}
 
 function lineTotal(it: QuoteItem): number {
   return it.quantity * it.unit_price * (1 - it.discount_pct / 100);
@@ -218,7 +111,7 @@ export default function Sales() {
   const toast = useToast();
   const [oppModalOpen, setOppModalOpen] = useState(false);
   const [editing, setEditing] = useState<Opportunity | null>(null);
-  const [form, setForm] = useState<OpportunityInput>(emptyOpportunity);
+  const [newStage, setNewStage] = useState<SalesStage>('NEW_LEAD');
   const [quotesFor, setQuotesFor] = useState<Opportunity | null>(null);
   const [search, setSearch] = useState('');
   const canWrite = hasPermission('customer.write');
@@ -251,31 +144,9 @@ export default function Sales() {
   const customerName = (id: string): string =>
     customersQuery.data?.find((c) => c.id === id)?.legal_name ?? id;
 
-  const createMut = useMutation({
-    mutationFn: (payload: OpportunityInput) =>
-      api.post<Opportunity>('/v1/sales/opportunities', payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['opportunities'] });
-      toast.success('Opportunity created');
-      closeOppModal();
-    },
-    onError: (e) => toast.error(errMessage(e, 'Could not create opportunity')),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Partial<OpportunityInput> }) =>
-      api.patch<Opportunity>(`/v1/sales/opportunities/${id}`, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['opportunities'] });
-      toast.success('Opportunity updated');
-      closeOppModal();
-    },
-    onError: (e) => toast.error(errMessage(e, 'Could not update opportunity')),
-  });
-
   function openCreate(stage: SalesStage = 'NEW_LEAD') {
     setEditing(null);
-    setForm(emptyOpportunity(stage));
+    setNewStage(stage);
     setOppModalOpen(true);
   }
 
@@ -319,41 +190,12 @@ export default function Sales() {
 
   function openEdit(o: Opportunity) {
     setEditing(o);
-    setForm({
-      customer_id: o.customer_id,
-      short_name: o.short_name ?? '',
-      gpu_model: o.gpu_model,
-      quantity: o.quantity,
-      expected_start: o.expected_start,
-      duration_months: o.duration_months,
-      commercial_model: o.commercial_model,
-      expected_mrr: Number(o.expected_mrr),
-      probability: o.probability,
-      sales_stage: o.sales_stage,
-      account_owner: o.account_owner,
-      account_owner_email: o.account_owner_email,
-      account_owner_sub: o.account_owner_sub,
-      region: o.region ?? '',
-      assigned_to: o.assigned_to ?? '',
-      next_action: o.next_action ?? '',
-      escrow_required: o.escrow_required ?? true,
-    });
     setOppModalOpen(true);
   }
 
   function closeOppModal() {
     setOppModalOpen(false);
     setEditing(null);
-    setForm(emptyOpportunity());
-  }
-
-  function submitOpp(e: FormEvent) {
-    e.preventDefault();
-    // An empty short name is stored as "none" (the folder then uses <model>-<qty>).
-    const blank = (v: string) => (v.trim() || null) as unknown as string;
-    const payload = { ...form, short_name: blank(form.short_name), region: blank(form.region), assigned_to: blank(form.assigned_to), next_action: blank(form.next_action) };
-    if (editing) updateMut.mutate({ id: editing.id, payload });
-    else createMut.mutate(payload);
   }
 
   // Client-side search over the opportunities list.
@@ -444,8 +286,6 @@ export default function Sales() {
     },
   ];
 
-  const isServerModel = form.commercial_model.includes('SERVER');
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -534,204 +374,13 @@ export default function Sales() {
         />
       )}
 
-      {/* Create / edit opportunity */}
-      <Modal open={oppModalOpen} onClose={closeOppModal} title={editing ? 'Edit Opportunity' : 'New Opportunity'}>
-        <form className="flex flex-col gap-4" onSubmit={submitOpp}>
-          <div>
-            <label className="label" htmlFor="opp_customer">Customer</label>
-            <select
-              id="opp_customer"
-              className="input"
-              required
-              value={form.customer_id}
-              onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
-            >
-              <option value="" disabled>
-                {customersQuery.isLoading ? 'Loading…' : 'Select a customer'}
-              </option>
-              {customersQuery.data?.map((c) => (
-                <option key={c.id} value={c.id}>{c.legal_name}</option>
-              ))}
-            </select>
-          </div>
 
-          <div>
-            <label className="label" htmlFor="opp_short">Short name</label>
-            <input id="opp_short" className="input" maxLength={60} placeholder="e.g. Foxgaroo GB200"
-              value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} />
-            <p className="mt-1 text-xs text-grape-soft" data-testid="opp-folder-preview">
-              Drive folder: <span className="text-white">{driveFolder(editing?.created_at, form.short_name, form.gpu_model, form.quantity)}</span>
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label" htmlFor="opp_model">{isServerModel ? 'Server / GPU Model' : 'GPU Model'}</label>
-              <input
-                id="opp_model"
-                className="input"
-                required
-                list="gpu-model-options"
-                placeholder={isServerModel ? 'SERVER-8X-H200' : 'H200'}
-                value={form.gpu_model}
-                onChange={(e) => setForm({ ...form, gpu_model: e.target.value })}
-              />
-              <datalist id="gpu-model-options">
-                {GPU_MODELS.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-            </div>
-            <div>
-              <label className="label" htmlFor="opp_qty">Quantity ({isServerModel ? 'servers' : 'GPUs'})</label>
-              <input
-                id="opp_qty" type="number" min={1} className="input" required
-                value={form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label" htmlFor="opp_cm">Commercial Model</label>
-              <select
-                id="opp_cm" className="input" required
-                value={form.commercial_model}
-                onChange={(e) => setForm({ ...form, commercial_model: e.target.value })}
-              >
-                {COMMERCIAL_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label" htmlFor="opp_term">Duration (months)</label>
-              <input
-                id="opp_term" type="number" min={1} className="input" required
-                value={form.duration_months}
-                onChange={(e) => setForm({ ...form, duration_months: Number(e.target.value) })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="label" htmlFor="opp_mrr">Expected MRR (USD)</label>
-              <input
-                id="opp_mrr" type="number" min={0} step="0.01" className="input" required
-                value={form.expected_mrr}
-                onChange={(e) => setForm({ ...form, expected_mrr: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="opp_prob">Probability (%)</label>
-              <input
-                id="opp_prob" type="number" min={0} max={100} className="input" required
-                value={form.probability}
-                onChange={(e) => setForm({ ...form, probability: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="opp_stage">Stage</label>
-              <select
-                id="opp_stage" className="input" required
-                value={form.sales_stage}
-                onChange={(e) => {
-                  // Picking a stage also proposes its default probability (still editable).
-                  const st = e.target.value as SalesStage;
-                  setForm({ ...form, sales_stage: st, probability: stageProb(st, form.probability) });
-                }}
-              >
-                {MACRO_STAGES.map((m) => (
-                  <optgroup key={m.key} label={`${m.n}. ${m.label}`}>
-                    {m.stages.map((s) => (
-                      <option key={s} value={s} title={STAGE_HINT[s]} disabled={!form.escrow_required && ESCROW_STAGES.includes(s)}>{STAGE_LABEL[s]}</option>
-                    ))}
-                  </optgroup>
-                ))}
-                <option value="ON_HOLD" title={STAGE_HINT.ON_HOLD}>On Hold</option>
-                <option value="LOST" title={STAGE_HINT.LOST}>Lost</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label" htmlFor="opp_start">Expected Start</label>
-              <input
-                id="opp_start" type="date" className="input"
-                value={form.expected_start ?? ''}
-                onChange={(e) => setForm({ ...form, expected_start: e.target.value || null })}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="opp_owner">Account Owner</label>
-              <OwnerAutocomplete
-                value={form.account_owner ?? ''}
-                email={form.account_owner_email}
-                onChange={(name, email, sub) =>
-                  setForm({
-                    ...form,
-                    account_owner: name || null,
-                    account_owner_email: email,
-                    account_owner_sub: sub,
-                  })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label" htmlFor="opp_region">Region</label>
-              <input
-                id="opp_region" className="input" maxLength={64} placeholder="Brazil (São Paulo)"
-                value={form.region}
-                onChange={(e) => setForm({ ...form, region: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="opp_assigned">Assigned to (person)</label>
-              <input
-                id="opp_assigned" className="input" maxLength={255} placeholder="Who is responsible now"
-                value={form.assigned_to}
-                onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="label" htmlFor="opp_next">Next action</label>
-            <input
-              id="opp_next" className="input" maxLength={255} placeholder="Review MSA & Order Form"
-              value={form.next_action}
-              onChange={(e) => setForm({ ...form, next_action: e.target.value })}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-white">
-            <input
-              type="checkbox" id="opp_escrow"
-              checked={form.escrow_required}
-              onChange={(e) => setForm({ ...form, escrow_required: e.target.checked })}
-            />
-            This deal uses an escrow account (turn off to skip the Payment substages)
-          </label>
-
-          {/* Capacity check gate */}
-          <CapacityCheckPanel gpuModel={form.gpu_model} quantity={form.quantity} />
-
-          {(createMut.isError || updateMut.isError) && (
-            <ErrorState error={createMut.error ?? updateMut.error} />
-          )}
-
-          <div className="mt-2 flex justify-end gap-3">
-            <button type="button" className="btn-ghost" onClick={closeOppModal}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={createMut.isPending || updateMut.isPending}>
-              {createMut.isPending || updateMut.isPending
-                ? 'Saving…'
-                : editing ? 'Save Changes' : 'Create Opportunity'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      <OpportunityFormModal
+        open={oppModalOpen}
+        onClose={closeOppModal}
+        editing={editing}
+        stage={newStage}
+      />
 
       {/* Quotes drawer */}
       {quotesFor && (
@@ -745,54 +394,6 @@ export default function Sales() {
   );
 }
 
-// --------------------------------------------------------------------------- //
-// Capacity Check panel — the gate before quoting (plan §9)
-// --------------------------------------------------------------------------- //
-function CapacityCheckPanel({ gpuModel, quantity }: { gpuModel: string; quantity: number }) {
-  const [checkKey, setCheckKey] = useState<string | null>(null);
-
-  const q = useQuery({
-    queryKey: ['capacity-check', checkKey],
-    queryFn: () =>
-      api.get<CapacityCheck>(
-        `/v1/capacity/check?gpu_model=${encodeURIComponent(gpuModel)}&quantity=${quantity}`,
-      ),
-    enabled: checkKey !== null,
-  });
-
-  return (
-    <div className="card flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <span className="eyebrow">Capacity Check</span>
-          <p className="text-xs text-grape-soft">Verify availability before quoting.</p>
-        </div>
-        <button
-          type="button"
-          className="btn-ghost text-sm"
-          disabled={!gpuModel || quantity < 1}
-          onClick={() => setCheckKey(`${gpuModel}:${quantity}:${Date.now()}`)}
-        >
-          Check {num(quantity)} × {gpuModel || '—'}
-        </button>
-      </div>
-
-      {q.isFetching ? (
-        <Spinner label="Checking capacity…" />
-      ) : q.isError ? (
-        <ErrorState error={q.error} />
-      ) : q.data ? (
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <Badge tone={AVAIL_TONE[q.data.status]}>{q.data.status.replace('_', ' ')}</Badge>
-          <span className="text-grape-soft">Requested <b className="text-white">{num(q.data.requested)}</b></span>
-          <span className="text-grape-soft">Available <b className="text-white">{num(q.data.available)}</b></span>
-          <span className="text-grape-soft">Incoming <b className="text-white">{num(q.data.incoming)}</b></span>
-          {q.data.gap > 0 && <span className="text-flamingo">Gap <b>{num(q.data.gap)}</b></span>}
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 // --------------------------------------------------------------------------- //
 // Quotes modal — list + create quote with line items (SKU picker)
@@ -994,108 +595,3 @@ function QuotesModal({
   );
 }
 
-// --------------------------------------------------------------------------- //
-// OwnerAutocomplete — free-text account-owner field with a real-time directory
-// dropdown. Typing keeps the free text as the name (and clears email/sub, since
-// it's no longer a verified directory match); picking a suggestion stores the
-// full {name, email, sub}. Backed by GET /v1/directory/users?q=.
-// --------------------------------------------------------------------------- //
-interface DirectoryUser {
-  sub: string;
-  email: string | null;
-  name: string | null;
-}
-
-function OwnerAutocomplete({
-  value,
-  email,
-  onChange,
-}: {
-  value: string;
-  email: string | null;
-  onChange: (name: string, email: string | null, sub: string | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [debounced, setDebounced] = useState(value);
-  const boxRef = useRef<HTMLDivElement>(null);
-
-  // Debounce the typed value before querying the directory.
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value.trim()), 200);
-    return () => clearTimeout(t);
-  }, [value]);
-
-  // Close the dropdown on outside click.
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, []);
-
-  const q = useQuery({
-    queryKey: ['directory', 'users', debounced],
-    queryFn: () =>
-      api.get<DirectoryUser[]>(
-        `/v1/directory/users${debounced ? `?q=${encodeURIComponent(debounced)}` : ''}`,
-      ),
-    enabled: open,
-    staleTime: 60_000,
-  });
-
-  const results = q.data ?? [];
-
-  return (
-    <div ref={boxRef} className="relative">
-      <input
-        id="opp_owner"
-        className="input"
-        placeholder="Type a name — suggestions from your directory"
-        autoComplete="off"
-        value={value}
-        onFocus={() => setOpen(true)}
-        onChange={(e) => {
-          // Free text: keep the typed name, drop the verified email/sub.
-          onChange(e.target.value, null, null);
-          setOpen(true);
-        }}
-      />
-      {/* Show the verified email when the current value came from a directory pick. */}
-      {email && (
-        <p className="mt-1 text-xs text-cyan">✓ {email}</p>
-      )}
-      {open && (
-        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-white/10 bg-space-700 shadow-card">
-          {q.isLoading ? (
-            <div className="px-3 py-2 text-xs text-grape-soft">Searching…</div>
-          ) : results.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-grape-soft">
-              No directory match — free text will be saved as-is.
-            </div>
-          ) : (
-            results.map((u) => {
-              const display = u.name ?? u.email ?? u.sub;
-              return (
-                <button
-                  key={u.sub}
-                  type="button"
-                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition hover:bg-white/5"
-                  onClick={() => {
-                    onChange(display, u.email, u.sub);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="text-sm text-white">{display}</span>
-                  {u.email && u.email !== display && (
-                    <span className="text-xs text-grape-soft">{u.email}</span>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

@@ -6,6 +6,7 @@ import { api } from '../api';
 import { hasPermission } from '../permissions';
 import { STAGE_TONE, stageLabel } from '../salesStages';
 import { useToast, errMessage } from '../components/toast';
+import OpportunityFormModal from '../components/OpportunityFormModal';
 import {
   SectionHeader,
   Spinner,
@@ -123,6 +124,7 @@ export default function CustomerDetail() {
   // `true` = creating, a record = editing it, `null` = closed.
   const [contactModal, setContactModal] = useState<Contact | true | null>(null);
   const [activityModal, setActivityModal] = useState<Activity | true | null>(null);
+  const [oppModal, setOppModal] = useState(false);
   const delContact = useMutation({
     mutationFn: (cid: string) => api.del<void>(`/v1/customers/${id}/contacts/${cid}`),
     onSuccess: () => {
@@ -159,7 +161,11 @@ export default function CustomerDetail() {
             title={customer.legal_name}
             description={customer.trading_name ?? undefined}
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {canWrite && (
+              <button type="button" className="btn-primary px-3 py-1.5 text-sm" data-testid="customer-new-opportunity"
+                onClick={() => setOppModal(true)}>+ New Opportunity</button>
+            )}
             <Badge tone="cyan">{customer.status}</Badge>
             <Badge tone="neutral">{customer.credit_status}</Badge>
             {customer.account_owner && <Badge tone="grape">Owner: {customer.account_owner}</Badge>}
@@ -270,7 +276,9 @@ export default function CustomerDetail() {
         </section>
       </div>
 
-      <RelatedRecords customerId={id} />
+      <RelatedRecords customerId={id} onNewOpportunity={canWrite ? () => setOppModal(true) : undefined} />
+
+      <OpportunityFormModal open={oppModal} onClose={() => setOppModal(false)} customerId={id} />
 
       {contactModal && (
         <ContactModal
@@ -473,7 +481,7 @@ const RES_TONE: Record<string, BadgeTone> = {
   PENDING: 'warning', ACTIVE: 'success', EXPIRED: 'neutral', RELEASED: 'cyan', CANCELLED: 'flamingo',
 };
 
-function RelatedRecords({ customerId }: { customerId: string }) {
+function RelatedRecords({ customerId, onNewOpportunity }: { customerId: string; onNewOpportunity?: () => void }) {
   const contractsQuery = useQuery({
     queryKey: ['contracts', 'byCustomer', customerId],
     queryFn: () => api.get<ContractLite[]>(`/v1/contracts?customer_id=${customerId}&limit=200`),
@@ -520,7 +528,12 @@ function RelatedRecords({ customerId }: { customerId: string }) {
         )}
       </section>
       <section className="flex min-w-0 flex-col gap-3">
-        <span className="eyebrow">OPPORTUNITIES</span>
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">OPPORTUNITIES</span>
+          {onNewOpportunity && (
+            <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={onNewOpportunity}>+ Add</button>
+          )}
+        </div>
         {oppsQuery.isLoading ? <Spinner /> : oppsQuery.isError ? <ErrorState error={oppsQuery.error} /> : (
           <DataTable columns={oppCols} rows={opps} rowKey={(o) => o.id}
             empty={<EmptyState title="No opportunities" hint="No pipeline for this customer." />} />

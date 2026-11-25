@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
+// The owner email is the SES mailbox simulator: the alert is really sent, but never delivered or bounced.
 // Customer Order Form intake: staff create a private link, the customer (not logged in)
 // fills it in, staff see it as received and can generate documents.
 const BASE = process.env.E2E_BASE_URL ?? 'https://dev.crm.tensorbay.io';
@@ -18,7 +19,7 @@ test('create the link, customer submits it logged out, staff see it received', a
     data: {
       customer_id: cust.id, gpu_model: 'B300', quantity: 128, duration_months: 24, commercial_model: 'GPU_MONTHLY',
       expected_mrr: '800000', probability: 60, short_name: 'E2E Intake', account_owner: 'E2E', sales_stage: 'DOCS_SENT',
-      account_owner_email: process.env.E2E_NOTIFY_EMAIL ?? 'e2e-browser@example.com',
+      account_owner_email: process.env.E2E_NOTIFY_EMAIL ?? 'success@simulator.amazonses.com',
     },
   })).json();
   try {

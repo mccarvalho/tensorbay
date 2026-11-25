@@ -41,12 +41,21 @@ test('add an opportunity from a customer and from a lead', async ({ page, playwr
     await page.locator('#opp_stage').selectOption('INTRO_CALL');
     await expect(page.locator('#opp_prob')).toHaveValue('20');
     await page.locator('#opp_mrr').fill('12345');
+    // Order Form (V4) fields.
+    await page.locator('#opp_upfront').fill('30');
+    await page.locator('#opp_pay_structure').selectOption('B');
+    await page.locator('#opp_first_delivery').fill('2027-01-30');
+    await page.locator('#opp_latest_delivery').fill('2027-06-30');
     await page.getByRole('button', { name: 'Create Opportunity' }).click();
     await expect.poll(async () => (await oppsOf(api, cust.id)).length).toBe(1);
     const first = (await oppsOf(api, cust.id))[0];
     created.push(first.id);
     expect(first.sales_stage).toBe('INTRO_CALL');
     expect(first.short_name).toBe('E2E From Customer');
+    expect(Number(first.upfront_pct)).toBe(30);
+    expect(first.payment_structure).toBe('B');
+    expect(first.first_delivery_date).toBe('2027-01-30');
+    expect(first.latest_delivery_date).toBe('2027-06-30');
     // The related-records table on the same page updates without a reload.
     await expect(page.getByText('Intro Call').first()).toBeVisible();
 

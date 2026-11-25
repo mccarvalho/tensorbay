@@ -30,6 +30,7 @@ class OpportunityBase(BaseModel):
     next_action: str | None = Field(default=None, max_length=255)
     escrow_required: bool = True
     upfront_pct: Decimal | None = Field(default=None, gt=0, lt=100)
+    node_spec: str | None = Field(default=None, max_length=500)
     payment_structure: Literal["A", "B", "C", "D"] | None = None
     first_delivery_date: date | None = None
     latest_delivery_date: date | None = None
@@ -59,6 +60,7 @@ class OpportunityUpdate(BaseModel):
     next_action: str | None = Field(default=None, max_length=255)
     escrow_required: bool | None = None
     upfront_pct: Decimal | None = Field(default=None, gt=0, lt=100)
+    node_spec: str | None = Field(default=None, max_length=500)
     payment_structure: Literal["A", "B", "C", "D"] | None = None
     first_delivery_date: date | None = None
     latest_delivery_date: date | None = None

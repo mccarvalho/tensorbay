@@ -111,6 +111,7 @@ def build_context(opp: Opportunity, customer: Customer, contacts: list[Contact],
             "latest_delivery_date": (opp.latest_delivery_date or opp.first_delivery_date or opp.expected_start).isoformat()
             if (opp.latest_delivery_date or opp.first_delivery_date or opp.expected_start) else None,
             "payment_structure": opp.payment_structure,
+            "node_spec": opp.node_spec,
             "upfront_pct": f"{Decimal(opp.upfront_pct).normalize():f}" if opp.upfront_pct is not None else None,
             "upfront_usd": money(committed * Decimal(opp.upfront_pct) / 100) if opp.upfront_pct is not None else None,
             "balance_usd": money(committed - committed * Decimal(opp.upfront_pct) / 100) if opp.upfront_pct is not None else None,

@@ -61,6 +61,7 @@ export interface Opportunity {
   next_action: string | null;
   escrow_required: boolean;
   upfront_pct: string | number | null;
+  node_spec: string | null;
   payment_structure: string | null;
   first_delivery_date: string | null;
   latest_delivery_date: string | null;
@@ -85,6 +86,7 @@ export interface OpportunityInput {
   next_action: string;
   escrow_required: boolean;
   upfront_pct: string;
+  node_spec: string;
   payment_structure: string;
   first_delivery_date: string | null;
   latest_delivery_date: string | null;
@@ -132,6 +134,7 @@ export function emptyOpportunity(stage: SalesStage = 'NEW_LEAD'): OpportunityInp
     next_action: '',
     escrow_required: true,
     upfront_pct: '',
+    node_spec: '',
     payment_structure: '',
     first_delivery_date: null,
     latest_delivery_date: null,
@@ -192,6 +195,7 @@ export default function OpportunityFormModal({
         next_action: editing.next_action ?? '',
         escrow_required: editing.escrow_required ?? true,
         upfront_pct: editing.upfront_pct === null || editing.upfront_pct === undefined ? '' : String(Number(editing.upfront_pct)),
+        node_spec: editing.node_spec ?? '',
         payment_structure: editing.payment_structure ?? '',
         first_delivery_date: editing.first_delivery_date ?? null,
         latest_delivery_date: editing.latest_delivery_date ?? null,
@@ -238,6 +242,7 @@ export default function OpportunityFormModal({
       ...form, short_name: blank(form.short_name), region: blank(form.region), assigned_to: blank(form.assigned_to), next_action: blank(form.next_action),
       upfront_pct: (form.upfront_pct.trim() === '' ? null : Number(form.upfront_pct)) as unknown as string,
       payment_structure: blank(form.payment_structure),
+      node_spec: blank(form.node_spec),
     };
     if (editing) updateMut.mutate({ id: editing.id, payload });
     else createMut.mutate(payload);
@@ -443,6 +448,14 @@ export default function OpportunityFormModal({
               </span>
             </span>
           </label>
+
+          <div>
+            <label className="label" htmlFor="opp_node_spec">Node specification (Order Form)</label>
+            <textarea id="opp_node_spec" className="input" rows={2} maxLength={500}
+              placeholder="Blank: written from the GPU spec sheet with the first document, then reused"
+              value={form.node_spec} onChange={(e) => setForm({ ...form, node_spec: e.target.value })} />
+            <p className="mt-1 text-xs text-grape-soft">One line, the same in every document of this deal. Edit it to override.</p>
+          </div>
 
           <span className="eyebrow mt-2">DELIVERY &amp; PAYMENT (ORDER FORM)</span>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

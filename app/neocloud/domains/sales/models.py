@@ -120,6 +120,9 @@ class Opportunity(Base, UUIDMixin, AuditMixin, TenantMixin):
     # False for deals without an escrow account: the Payment substages are skipped.
     # V4 Order Form: the negotiated advance (greater than 0% and less than 100% of the
     # Committed Value), how the balance is paid (A-D) and the delivery targets.
+    # What one node (or rack) is, in one line, for the Order Form. Written from the GPU spec sheet
+    # the first time a document needs it, so every document of the deal says the same; editable.
+    node_spec: Mapped[str | None] = mapped_column(String(500), nullable=True)
     upfront_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     payment_structure: Mapped[str | None] = mapped_column(String(1), nullable=True)
     first_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)

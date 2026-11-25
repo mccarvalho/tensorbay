@@ -378,3 +378,21 @@ async def test_spec_line_is_requested_at_temperature_zero(client, env, monkeypat
     opp = await _deal(client)
     await _generate(client, opp, doc_type="MSA")
     assert seen and seen[0].get("temperature") == 0  # same line in the MSA and the Order Form of a deal
+
+
+async def test_node_spec_is_written_once_and_every_document_of_the_deal_reuses_it(client, env):
+    opp = await _deal(client)
+    env.prompts.clear()
+    _, msa = await _generate(client, opp, doc_type="MSA")
+    assert len(env.prompts) == 1  # the model wrote the line once
+    saved = (await client.get(f"{V1}/sales/opportunities/{opp['id']}")).json()["node_spec"]
+    assert saved == "8 GPUs, 288 GB HBM3e each, 2x Xeon, 2 TB, NVLink 5"
+    _, of = await _generate(client, opp, doc_type="ORDER_FORM")
+    assert len(env.prompts) == 1  # not asked again
+    for doc in (msa, of):
+        assert saved in _text((await client.get(f"{V1}/documents/{doc['id']}/download")).content)
+    # A person can settle it: their wording wins and the model is not used.
+    await client.patch(f"{V1}/sales/opportunities/{opp['id']}", json={"node_spec": "8x B300 SXM, 288 GB each, 2x Xeon 6, 4 TB DDR5"})
+    _, msa2 = await _generate(client, opp, doc_type="MSA")
+    assert len(env.prompts) == 1
+    assert "8x B300 SXM, 288 GB each, 2x Xeon 6, 4 TB DDR5" in _text((await client.get(f"{V1}/documents/{msa2['id']}/download")).content)

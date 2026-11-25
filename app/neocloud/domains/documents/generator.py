@@ -64,26 +64,28 @@ def _references(base: kb.KnowledgeBase, doc_type: str, gpu_model: str) -> list[t
 def build_document(
     ctx: dict[str, Any], doc_type: str, notes: str | None,
     base: kb.KnowledgeBase, svc: BedrockDocumentService,
-) -> tuple[bytes, str | None]:
-    """Blocking. Returns (docx bytes, markdown or None for filled forms)."""
+) -> tuple[bytes, str | None, str | None]:
+    """Blocking. Returns (docx bytes, markdown or None for filled forms, a newly written node spec or None)."""
     opp = ctx["opportunity"]
     if doc_type in FILLED_FORMS:
         template = base.template(FILLED_FORMS[doc_type])
         if doc_type == "NDA":
-            return forms.fill_nda(template, ctx, notes), None
+            return forms.fill_nda(template, ctx, notes), None, None
         if doc_type == "ESCROW_AGREEMENT":
-            return forms.fill_escrow(template, ctx, notes), None
+            return forms.fill_escrow(template, ctx, notes), None, None
         # MSA and Order Form share Schedule A; the only AI-written line is the per node spec
         # (temperature 0, so the MSA and the Order Form of one deal carry the same line).
-        spec_line: str | None = None
-        specs = _spec_names(base, opp["gpu_model"])
+        spec_line: str | None = (opp.get("node_spec") or "").strip() or None  # already settled for this deal
+        new_spec: str | None = None
+        specs = _spec_names(base, opp["gpu_model"]) if not spec_line else []
         if specs:
             try:
                 spec_line = svc.complete(prompts.SPEC_LINE_PROMPT, base.text(specs[0], 6000), max_tokens=400, temperature=0).strip().splitlines()[0]
             except Exception as exc:  # noqa: BLE001 - the form is still usable with the blank
                 logger.warning("spec_line_failed", error=str(exc))
+            new_spec = spec_line
         fill = forms.fill_msa if doc_type == "MSA" else forms.fill_order_form
-        return fill(template, ctx, spec_line, notes), None
+        return fill(template, ctx, spec_line, notes), None, new_spec
 
     kind = {"PROPOSAL": "PROP", "ORDER_FORM": "OF", "POC_AGREEMENT": "POC", "ESCROW_AGREEMENT": "ESC",
             "ACCEPTANCE_NOTICE": "ACC", "LOI": "LOI", "CONTRACT": "CON"}.get(doc_type, doc_type)
@@ -92,7 +94,7 @@ def build_document(
     user = prompts.user_prompt(doc_type, deal_json, _references(base, doc_type, opp["gpu_model"]), notes)
     markdown = svc.complete(prompts.SYSTEM_PROMPT, user, max_tokens=svc.settings.bedrock_max_tokens)
     title = f"{TYPE_TITLE.get(doc_type, doc_type)} - {ctx['customer']['legal_name']}"
-    return render.markdown_to_docx(markdown, title), markdown
+    return render.markdown_to_docx(markdown, title), markdown, None
 
 
 async def save_to_drive(session: AsyncSession, settings: Settings, doc: GeneratedDocument, data: bytes, actor: str) -> None:
@@ -141,9 +143,11 @@ async def run_generation(document_id: str) -> None:
             submitted = await intake_service.latest_submitted(session, opp.id)
             ctx["customer_intake"] = submitted.data if submitted else None
             svc = BedrockDocumentService(settings)
-            data, markdown = await asyncio.to_thread(
+            data, markdown, new_spec = await asyncio.to_thread(
                 build_document, ctx, doc.doc_type.value, doc.notes, kb.get_kb(), svc
             )
+            if new_spec and not opp.node_spec:
+                opp.node_spec = new_spec[:500]  # the next document of this deal reuses it
             if settings.documents_bucket:
                 base_key = f"documents/{doc.doc_type.value}/{doc.opportunity_id}/v{doc.version}-{doc.id}"
                 doc.docx_s3_key = f"{base_key}.docx"

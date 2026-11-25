@@ -29,12 +29,20 @@ def _msa_template() -> bytes:
     p.add_run("mer legal name] ")
     p.add_run("registration number [●]")
     d.add_paragraph("Order Form No. ______ under the MSA")
+    d.add_paragraph("and [Customer legal name], a [company form] organized under the laws of [jurisdiction], "
+                    "with its registered office at [address], represented by [name], [title] (\"Customer\").")
     t = d.add_table(rows=0, cols=2)
     for k, v in [
         ("Item", "Specification"), ("Customer", "[Legal name, form, jurisdiction]"),
         ("Platform", "☐ NVIDIA HGX B200   ☐ NVIDIA HGX B300 (air-cooled)   ☐ Other: __________"),
         ("Quantity", "______ nodes / racks · ______ GPUs · ______ CPUs"),
-        ("Per node or rack", "[GPUs per node]"), ("Facility", "Region (if agreed): __________"),
+        ("Per node or rack", "[GPUs per node]"),
+        ("Compute fabric", "☐ NVIDIA Quantum InfiniBand (NDR)   ☐ RoCE v2 Ethernet   · approx. ______ Gb/s per GPU"),
+        ("Storage", "Shared high-performance storage approx. ______ TB usable; local NVMe per node"),
+        ("Connectivity", "Dedicated internet ______ Gb/s with ______ TB per month egress allowance; VPN on request"),
+        ("Operating environment", "Linux operating system image, NVIDIA drivers, CUDA toolkit"),
+        ("Customer technical contacts", "______"), ("Customer billing contact", "______"),
+        ("Facility", "Region (if agreed): __________"),
         ("Target Service Commencement Date", "____ / ____ / ______ (Section 3)"),
         ("Term", "______ months from the Service Commencement Date"), ("Rate", "US$ ______ per GPU-hour"),
         ("Committed Value", "US$ ____ (____)"),

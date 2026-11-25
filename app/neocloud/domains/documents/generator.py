@@ -16,6 +16,7 @@ from neocloud.domains.documents.models import DocType, DocumentStatus, Generated
 from neocloud.domains.documents.service import BedrockDocumentService
 from neocloud.domains.drive import service as drive_service
 from neocloud.domains.drive.service import DOCX_MIME, DriveError  # noqa: F401
+from neocloud.domains.intake import service as intake_service
 
 logger = get_logger(__name__)
 
@@ -131,6 +132,8 @@ async def run_generation(document_id: str) -> None:
         try:
             opp, customer, contacts, quote = await deal.load_deal(session, doc.opportunity_id)
             ctx = deal.build_context(opp, customer, contacts, quote)
+            submitted = await intake_service.latest_submitted(session, opp.id)
+            ctx["customer_intake"] = submitted.data if submitted else None
             svc = BedrockDocumentService(settings)
             data, markdown = await asyncio.to_thread(
                 build_document, ctx, doc.doc_type.value, doc.notes, kb.get_kb(), svc

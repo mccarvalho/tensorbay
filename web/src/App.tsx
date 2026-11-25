@@ -20,8 +20,8 @@ import Suppliers from './pages/Suppliers';
 import Capacity from './pages/Capacity';
 import Reservations from './pages/Reservations';
 import Economics from './pages/Economics';
-import Documents from './pages/Documents';
 import Admin from './pages/Admin';
+import CustomerIntake from './pages/CustomerIntake';
 
 // Dashboard pulls in recharts — code-split it so other routes stay lean.
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -31,6 +31,8 @@ export default function App(): ReactElement {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/callback" element={<Callback />} />
+      {/* Public: the customer fills in their Order Form data with a private link. */}
+      <Route path="/intake/:token" element={<CustomerIntake />} />
 
       <Route
         element={
@@ -55,7 +57,8 @@ export default function App(): ReactElement {
         <Route path="capacity" element={<Capacity />} />
         <Route path="reservations" element={<Reservations />} />
         <Route path="economics" element={<Economics />} />
-        <Route path="documents" element={<Documents />} />
+        {/* The old AI Documents page is gone: documents are generated from each opportunity. */}
+        <Route path="documents" element={<Navigate to="/sales" replace />} />
         <Route path="admin" element={<Admin />} />
       </Route>
 

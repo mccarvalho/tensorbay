@@ -26,7 +26,6 @@ const NAV: NavItem[] = [
   { to: '/capacity', label: 'Capacity' },
   { to: '/reservations', label: 'Reservations' },
   { to: '/economics', label: 'Economics', perm: 'economics.read' },
-  { to: '/documents', label: 'AI Documents' },
   { to: '/admin', label: 'Admin', role: 'SUPER_ADMIN' },
 ];
 

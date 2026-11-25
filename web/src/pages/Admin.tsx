@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import DriveStorage from './DriveStorage';
 import {
   SectionHeader,
   Spinner,
@@ -185,6 +186,8 @@ export default function Admin() {
           empty={<EmptyState title="No users yet" hint="Invite your first team member." />}
         />
       )}
+
+      <DriveStorage />
 
       {inviteOpen && (
         <InviteModal

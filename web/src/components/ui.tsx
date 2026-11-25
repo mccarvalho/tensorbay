@@ -168,14 +168,15 @@ export function Modal({ open, onClose, title, children }: ModalProps): ReactElem
   if (!open) return null;
 
   return (
+    // Clicking the backdrop does NOT close the window: a stray click (or a text
+    // selection that ends outside) used to throw away what was being typed.
+    // Close with the X button, Cancel, or Escape.
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-space-900/70 p-4 backdrop-blur-sm"
-      onClick={onClose}
       role="presentation"
     >
       <div
         className="card-glow w-full max-w-lg"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={title}

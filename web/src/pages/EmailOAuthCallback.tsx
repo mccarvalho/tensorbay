@@ -35,7 +35,7 @@ export default function EmailOAuthCallback(): ReactElement {
       .then((r) => {
         const drive = r.kind === 'drive';
         toast.success(drive ? `Google Drive connected (${r.address})` : `${r.address} connected`);
-        navigate(drive ? '/documents' : '/email', { replace: true });
+        navigate(drive ? '/admin' : '/email', { replace: true });
       })
       .catch((e: unknown) => setError(errMessage(e, 'Could not connect the mailbox.')));
   }, [params, navigate, toast]);
@@ -48,7 +48,7 @@ export default function EmailOAuthCallback(): ReactElement {
           <h1 className="mt-2 text-xl">Mailbox not connected</h1>
           <p className="mt-2 text-sm text-flamingo">{error}</p>
           <Link to="/email" className="btn-primary mt-6 inline-flex">Back to Email</Link>
-          <Link to="/documents" className="btn-ghost mt-6 ml-2 inline-flex">Back to AI Documents</Link>
+          <Link to="/admin" className="btn-ghost mt-6 ml-2 inline-flex">Back to Admin</Link>
         </div>
       </div>
     );

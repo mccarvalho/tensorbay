@@ -1,7 +1,10 @@
 """Upload the TensorBay knowledge base to the private documents bucket.
 
     uv run --with boto3 --with pypdf --with python-docx python app/scripts/ingest_kb.py \
-        "<path to KB TensorBay>" <bucket>
+        "<path to KB TensorBay>" <bucket> ["<path to the contract package, e.g. TensorBay_Contract_Package_V4>"]
+
+The contract package (01 MSA, 02 Schedule A Order Form, 03 Schedule D-1 Escrow Agreement) is the
+current standard: it is uploaded last, so it replaces the older MSA form that still sits in the KB.
 
 The bucket's default encryption (its own KMS key) applies; do not set SSE here.
 
@@ -54,7 +57,28 @@ def pdf_text(path: Path) -> str:
     return "\n".join((p.extract_text() or "") for p in pypdf.PdfReader(str(path)).pages)
 
 
-def main(kb: str, bucket: str) -> None:
+# Contract package files (by numeric prefix) -> template name and reference text name.
+PACKAGE = {
+    "01": ("MSA", "TensorBay_MSA_Standard_Form"),
+    "02": ("ORDER_FORM", "TensorBay_Schedule_A_Order_Form"),
+    "03": ("ESCROW", "TensorBay_Schedule_D1_Escrow_Agreement"),
+}
+
+
+def upload_package(s3, package: str, bucket: str, manifest: dict) -> None:
+    for f in sorted(Path(package).glob("*.docx")):
+        entry = PACKAGE.get(f.name[:2])
+        if not entry:
+            continue
+        template, text_name = entry
+        s3.put_object(Bucket=bucket, Key=f"kb/templates/{template}.docx", Body=f.read_bytes())
+        text = docx_text(f)
+        s3.put_object(Bucket=bucket, Key=f"kb/text/{text_name}.txt", Body=text.encode(), ContentType="text/plain; charset=utf-8")
+        manifest.setdefault("package", []).append(f.name)
+        print(f"{len(text):>8}  package {f.name} -> templates/{template}.docx + text/{text_name}.txt")
+
+
+def main(kb: str, bucket: str, package: str | None = None) -> None:
     root = Path(kb)
     s3 = boto3.client("s3")
     manifest: dict[str, list[str]] = {"templates": [], "text": [], "skipped": []}
@@ -84,10 +108,12 @@ def main(kb: str, bucket: str) -> None:
         s3.put_object(Bucket=bucket, Key=key, Body=text.encode(), ContentType="text/plain; charset=utf-8")
         manifest["text"].append(key)
         print(f"{len(text):>8}  {key}")
+    if package:
+        upload_package(s3, package, bucket, manifest)
     s3.put_object(Bucket=bucket, Key="kb/manifest.json", Body=json.dumps(manifest, indent=1).encode(),)
     print(json.dumps({k: len(v) for k, v in manifest.items()}))
     print("skipped:", *manifest["skipped"], sep="\n  ")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)

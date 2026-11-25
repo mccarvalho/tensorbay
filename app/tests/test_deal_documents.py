@@ -43,12 +43,49 @@ def _msa_template() -> bytes:
         ("Operating environment", "Linux operating system image, NVIDIA drivers, CUDA toolkit"),
         ("Customer technical contacts", "______"), ("Customer billing contact", "______"),
         ("Facility", "Region (if agreed): __________"),
-        ("Target Service Commencement Date", "____ / ____ / ______ (Section 3)"),
-        ("Term", "______ months from the Service Commencement Date"), ("Rate", "US$ ______ per GPU-hour"),
+        ("Target delivery date(s)", "First target: ____ / ____ / ______. Latest original target (all capacity): ____ / ____ / ______. Sections 3-4 apply."),
+        ("Term", "______ months for each accepted Delivery Tranche"), ("Rate", "US$ ______ per GPU-hour"),
         ("Committed Value", "US$ ____ (____)"),
-        ("Security (if any)", "☐ None   ☐ Escrow of US$ ________ (Schedule D, Part 2)"),
-        ("Payment instructions", "Reference: Order Form No. ______"),
-        ("Special terms (if any)", "______"),
+        ("Payment Structure (select one; Schedule D)", "Select one: ☐ A. Monthly installments ☐ B. Quarterly installments + deposit ☐ C. Monthly installments + Security ☐ D. Other balance schedule: ______."),
+        ("Upfront Payment", "Agreed advance: ______% of Committed Value = US$ __________. Both fields required."),
+        ("Mandatory upfront route", "Required route (MSA 6.2): ☐ Direct wire (latest target on/before cutoff) ☐ Escrow (after cutoff). Escrow amount: US$ ______ (= advance); agent: ______."),
+        ("Remaining payment schedule", "Committed Value less Upfront Payment = US$ ______. ______ installments of US$ ______ per ☐ month ☐ quarter."),
+        ("Delivery plan / tranche allocation", "☐ Single Cluster  ☐ Multiple genuine Delivery Tranches"),
+        ("Continuing Security (separate)", "☐ None  ☐ Deposit US$ ______"),
+        ("Payment instructions", "Escrow: D-1 instructions. Ref.: Order Form No. ______."),
+        ("Special terms (if any)", "Only amendments identifying the MSA section are effective under Section 16.1. Other terms: ______."),
+    ]:
+        r = t.add_row().cells
+        r[0].text, r[1].text = k, v
+    tr = d.add_table(rows=0, cols=6)
+    for row in (["Tranche", "GPUs", "Target date", "Gross value USD", "Upfront USD", "Balance USD"], ["________"] * 6, ["________"] * 6, ["TOTAL"] + ["________"] * 5):
+        cells = tr.add_row().cells
+        for c, v in zip(cells, row):
+            c.text = v
+    d.add_paragraph("Order Form accepted for Customer")
+    d.add_paragraph("between TensorBay Technology, LLC and Customer.")
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _escrow_template() -> bytes:
+    d = docx.Document()
+    d.add_paragraph("Reference: TB-ESC-____________  |  MSA date: ____________  |  Order Form No.: ____________")
+    sign = d.add_table(rows=2, cols=3)
+    for i, v in enumerate(["TensorBay Technology, LLC", "Customer", "Escrow Agent"]):
+        sign.cell(0, i).text = v
+    sign.cell(1, 0).text = "By: ____\nName: Bruno da Cruz Ramos\nTitle: Chief Operating Officer"
+    sign.cell(1, 1).text = "By: ____\nName: ________________\nTitle: _________________\nDate: ____"
+    sign.cell(1, 2).text = "By: ____\nName: ________________"
+    t = d.add_table(rows=0, cols=2)
+    for k, v in [
+        ("Item", "Agreed details"),
+        ("MSA and Order Form", "MSA reference/date: ______________\nOrder Form No.: _____________  Order Effective Date: _____________"),
+        ("Customer / remitter", "Legal entity: ____________________\nRegistered jurisdiction: _____________\nVerified remitting account: _______"),
+        ("Upfront Payment", "Committed Value (USD): ______________\nAgreed Upfront Payment (% of Committed Value): ______%\nAgreed Upfront Payment (USD): ____________"),
+        ("Payment deadline", "Order Effective Date: ______; latest target: __________\n30th Business Day cutoff: ______"),
+        ("Verified contacts", "TensorBay: ______ / phone: ______\nCustomer: ________ / phone: ______"),
     ]:
         r = t.add_row().cells
         r[0].text, r[1].text = k, v
@@ -59,7 +96,7 @@ def _msa_template() -> bytes:
 
 class FakeKb:
     def template(self, name):
-        return _msa_template()
+        return _escrow_template() if name == "ESCROW" else _msa_template()
 
     def text_names(self):
         return ["TensorBay_Spec_NVIDIA_HGX_B300_Air-Cooled", "TensorBay_Proposal_Goodfire_B300", "TensorBay_MSA_Standard_Form"]
@@ -114,6 +151,7 @@ async def _deal(client: AsyncClient, short: str | None = "Positivo B300", escrow
         "customer_id": cust["id"], "gpu_model": "B300", "quantity": 512, "duration_months": 36,
         "commercial_model": "GPU_MONTHLY", "expected_mrr": "1000000", "probability": 50, "short_name": short,
         "escrow_required": escrow, "expected_start": "2027-01-28", "region": "Brazil (São Paulo)",
+        "first_delivery_date": "2027-01-30", "latest_delivery_date": "2027-06-30", "upfront_pct": "30", "payment_structure": "A",
     })).json()
     return opp
 
@@ -173,22 +211,68 @@ async def test_msa_fills_the_standard_form_instead_of_rewriting_it(client, env):
     text = _text(data)
     assert "FOXGAROO LTDA" in text and "[Custo" not in text and "[Customer legal name]" not in text
     assert "registration number 12.345.678/0001-90" in text
-    assert "TB-MSA-POSITIVO-" in text and "Order Form No. TB-MSA-POSITIVO-" in text
+    assert "TB-MSA-POSITIVO-" in text and "Order Form No. TB-OF-POSITIVO-" in text
     assert "☒ NVIDIA HGX B300 (air-cooled)" in text and "☐ NVIDIA HGX B200" in text
     assert "64 nodes / racks · 512 GPUs · ______ CPUs" in text
     assert "8 GPUs, 288 GB HBM3e each" in text
-    assert "Region (if agreed): Brazil (São Paulo)" in text and "28 / 01 / 2027" in text
-    assert "36 months from" in text and "US$ 2.6755 per GPU-hour" in text
+    assert "Region (if agreed): Brazil (São Paulo)" in text
+    assert "First target: 30 / 01 / 2027. Latest original target (all capacity): 30 / 06 / 2027." in text
+    assert "36 months for each accepted" in text and "US$ 2.6755 per GPU-hour" in text
     assert "US$ 36,000,000.00 (512 GPUs × 26,280 hours × Rate)" in text
-    assert "☒ Escrow of US$ ________" in text and "☐ None" in text
+    # V4: negotiated advance, structure, route and the balance.
+    assert "Agreed advance: 30% of Committed Value = US$ 10,800,000.00" in text
+    assert "☒ A. Monthly installments" in text and "☐ B. Quarterly" in text
+    assert "☒ Escrow (after cutoff)" in text and "Escrow amount: US$ 10,800,000.00 (= advance)" in text
+    assert "Committed Value less Upfront Payment = US$ 25,200,000.00." in text
+    assert "☒ Single Cluster" in text
+    # Tranche table: one Cluster carries the whole deal.
+    d = docx.Document(io.BytesIO(data))
+    rows = [[c.text for c in r.cells] for t in d.tables for r in t.rows if r.cells[0].text in ("1", "TOTAL")]
+    assert rows[0] == ["1", "512", "30 / 06 / 2027", "36,000,000.00", "10,800,000.00", "25,200,000.00"]
+    assert rows[1] == ["TOTAL", "512", "________", "36,000,000.00", "10,800,000.00", "25,200,000.00"]
     assert "[Draft note, to be reviewed] Net 30 on the balance" in text
 
 
-async def test_msa_without_escrow_ticks_none(client, env):
+async def test_msa_without_escrow_ticks_the_direct_wire(client, env):
     opp = await _deal(client, escrow=False)
     _, doc = await _generate(client, opp, doc_type="MSA")
     text = _text((await client.get(f"{V1}/documents/{doc['id']}/download")).content)
-    assert "☒ None" in text and "☐ Escrow of US$" in text
+    assert "☒ Direct wire (latest target on/before cutoff)" in text and "☐ Escrow (after cutoff)" in text
+    assert "Escrow amount: US$ ______" in text  # nothing to fill when there is no escrow
+
+
+async def test_order_form_and_escrow_agreement_are_filled_forms(client, env):
+    opp = await _deal(client)
+    env.prompts.clear()
+    _, of = await _generate(client, opp, doc_type="ORDER_FORM")
+    assert of["status"] == "GENERATED", of
+    of_text = _text((await client.get(f"{V1}/documents/{of['id']}/download")).content)
+    assert "Order Form No. TB-OF-POSITIVO-" in of_text
+    assert "Order Form accepted for Customer" not in of_text and "Order Form accepted for Foxgaroo Ltda" in of_text
+    assert "between TensorBay Technology, LLC and Foxgaroo Ltda." in of_text
+    assert "Agreed advance: 30% of Committed Value = US$ 10,800,000.00" in of_text
+    _, esc = await _generate(client, opp, doc_type="ESCROW_AGREEMENT")
+    assert esc["status"] == "GENERATED", esc
+    e_text = _text((await client.get(f"{V1}/documents/{esc['id']}/download")).content)
+    assert "Reference: TB-ESC-POSITIVO-" in e_text and "Order Form No.: TB-OF-POSITIVO-" in e_text
+    assert "Legal entity: Foxgaroo Ltda" in e_text and "Registered jurisdiction: Brazil" in e_text
+    assert "Committed Value (USD): 36,000,000.00" in e_text and "(% of Committed Value): 30%" in e_text
+    assert "Agreed Upfront Payment (USD): 10,800,000.00" in e_text and "latest target: 30 / 06 / 2027" in e_text
+    assert "Customer: Ana Souza" in e_text
+    # Only the Order Form's per-node spec line used the model; the escrow agreement used none.
+    assert len(env.prompts) == 1 and "ONE line" in env.prompts[0][0]
+    assert len(env.drive.uploads) == 2 and env.drive.path_of(env.drive.uploads[1][0]).endswith("/Escrow Agreement")
+
+
+async def test_v4_deal_fields_are_validated(client):
+    cust = (await client.post(f"{V1}/customers", json={"legal_name": "V4 Co", "status": "PROSPECT"})).json()
+    base = {"customer_id": cust["id"], "gpu_model": "B300", "quantity": 8, "duration_months": 12,
+            "commercial_model": "GPU_MONTHLY", "expected_mrr": "1000", "probability": 10}
+    for bad in ({"upfront_pct": "0"}, {"upfront_pct": "100"}, {"upfront_pct": "-5"}, {"payment_structure": "E"}):
+        assert (await client.post(f"{V1}/sales/opportunities", json={**base, **bad})).status_code == 422, bad
+    ok = await client.post(f"{V1}/sales/opportunities", json={**base, "upfront_pct": "99.99", "payment_structure": "D",
+                                                                "first_delivery_date": "2027-01-30", "latest_delivery_date": "2027-03-01"})
+    assert ok.status_code == 201 and ok.json()["upfront_pct"] in ("99.99", 99.99) and ok.json()["payment_structure"] == "D"
 
 
 async def test_drive_not_connected_keeps_the_document_and_retry_files_it(client, env):

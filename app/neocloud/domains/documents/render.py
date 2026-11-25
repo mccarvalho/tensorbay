@@ -228,3 +228,19 @@ def docx_bytes(doc: DocxDocument) -> bytes:
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def fill_blank(paragraphs, label: str, value: str) -> bool:
+    """In the paragraph that has ``label`` followed by a run of underscores, put ``value``
+    where the blank is ("Legal entity: ______" -> "Legal entity: Acme"). First match only."""
+    import re
+
+    for par in paragraphs:
+        m = re.search(re.escape(label) + r"\s*_{2,}", par.text)
+        if m:
+            return replace_in_paragraph(par, m.group(0), f"{label} {value}")
+    return False
+
+
+def cell_paragraphs(cell):
+    return list(cell.paragraphs)

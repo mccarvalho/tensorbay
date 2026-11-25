@@ -118,6 +118,12 @@ class Opportunity(Base, UUIDMixin, AuditMixin, TenantMixin):
     assigned_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
     next_action: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # False for deals without an escrow account: the Payment substages are skipped.
+    # V4 Order Form: the negotiated advance (greater than 0% and less than 100% of the
+    # Committed Value), how the balance is paid (A-D) and the delivery targets.
+    upfront_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    payment_structure: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    first_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    latest_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     escrow_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     account_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
     account_owner_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -28,11 +28,11 @@ interface DealDocument {
 
 const TYPES: Array<{ type: DealDocType; label: string; how: string }> = [
   { type: 'PROPOSAL', label: 'Proposal', how: 'AI draft from the deal, quote and reference proposals' },
-  { type: 'MSA', label: 'MSA + Order Form (Schedule A)', how: "Fills TensorBay's standard MSA; the legal text is not rewritten" },
-  { type: 'ORDER_FORM', label: 'Order Form (standalone)', how: 'AI draft following Schedule A of the MSA' },
+  { type: 'MSA', label: 'MSA (with Schedule A)', how: "Fills TensorBay's standard MSA (V4) and its Schedule A Order Form; the legal text is not rewritten" },
+  { type: 'ORDER_FORM', label: 'Order Form (Schedule A)', how: "Fills TensorBay's standard Schedule A as its own document" },
   { type: 'NDA', label: 'NDA', how: "Fills TensorBay's standard multilateral NDA" },
   { type: 'POC_AGREEMENT', label: 'PoC Agreement', how: 'AI draft for a paid PoC under the MSA' },
-  { type: 'ESCROW_AGREEMENT', label: 'Escrow Agreement', how: 'AI draft from Schedule D, Part 2 of the MSA' },
+  { type: 'ESCROW_AGREEMENT', label: 'Escrow Agreement (Schedule D-1)', how: "Fills TensorBay's standard tripartite escrow agreement. Only needed when the Upfront Payment goes through escrow" },
   { type: 'ACCEPTANCE_NOTICE', label: 'Acceptance Notice', how: 'AI draft: Readiness Notice and Acceptance Certificate' },
 ];
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(TYPES.map((t) => [t.type, t.label]));

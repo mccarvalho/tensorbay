@@ -59,6 +59,10 @@ export interface Opportunity {
   assigned_to: string | null;
   next_action: string | null;
   escrow_required: boolean;
+  upfront_pct: string | number | null;
+  payment_structure: string | null;
+  first_delivery_date: string | null;
+  latest_delivery_date: string | null;
 }
 
 export interface OpportunityInput {
@@ -79,6 +83,10 @@ export interface OpportunityInput {
   assigned_to: string;
   next_action: string;
   escrow_required: boolean;
+  upfront_pct: string;
+  payment_structure: string;
+  first_delivery_date: string | null;
+  latest_delivery_date: string | null;
 }
 
 interface CapacityCheck {
@@ -122,6 +130,10 @@ export function emptyOpportunity(stage: SalesStage = 'NEW_LEAD'): OpportunityInp
     assigned_to: '',
     next_action: '',
     escrow_required: true,
+    upfront_pct: '',
+    payment_structure: '',
+    first_delivery_date: null,
+    latest_delivery_date: null,
   };
 }
 
@@ -178,6 +190,10 @@ export default function OpportunityFormModal({
         assigned_to: editing.assigned_to ?? '',
         next_action: editing.next_action ?? '',
         escrow_required: editing.escrow_required ?? true,
+        upfront_pct: editing.upfront_pct === null || editing.upfront_pct === undefined ? '' : String(Number(editing.upfront_pct)),
+        payment_structure: editing.payment_structure ?? '',
+        first_delivery_date: editing.first_delivery_date ?? null,
+        latest_delivery_date: editing.latest_delivery_date ?? null,
       });
     } else {
       setForm({ ...emptyOpportunity(stage), ...defaults, customer_id: customerId ?? defaults?.customer_id ?? '' });
@@ -217,7 +233,11 @@ export default function OpportunityFormModal({
     e.preventDefault();
     // An empty short name is stored as "none" (the folder then uses <model>-<qty>).
     const blank = (v: string) => (v.trim() || null) as unknown as string;
-    const payload = { ...form, short_name: blank(form.short_name), region: blank(form.region), assigned_to: blank(form.assigned_to), next_action: blank(form.next_action) };
+    const payload = {
+      ...form, short_name: blank(form.short_name), region: blank(form.region), assigned_to: blank(form.assigned_to), next_action: blank(form.next_action),
+      upfront_pct: (form.upfront_pct.trim() === '' ? null : Number(form.upfront_pct)) as unknown as string,
+      payment_structure: blank(form.payment_structure),
+    };
     if (editing) updateMut.mutate({ id: editing.id, payload });
     else createMut.mutate(payload);
   }
@@ -408,14 +428,55 @@ export default function OpportunityFormModal({
               onChange={(e) => setForm({ ...form, next_action: e.target.value })}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-white">
+          <label className="flex items-start gap-2 text-sm text-white">
             <input
-              type="checkbox" id="opp_escrow"
+              type="checkbox" id="opp_escrow" className="mt-1"
               checked={form.escrow_required}
               onChange={(e) => setForm({ ...form, escrow_required: e.target.checked })}
             />
-            This deal uses an escrow account (turn off to skip the Payment substages)
+            <span>
+              The Upfront Payment goes through escrow
+              <span className="block text-xs text-grape-soft">
+                Required when the latest delivery target is after the 30th Business Day from the Order Effective Date (MSA 6.2).
+                Turn off for a direct wire; the Payment substages are then skipped.
+              </span>
+            </span>
           </label>
+
+          <span className="eyebrow mt-2">DELIVERY &amp; PAYMENT (ORDER FORM)</span>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="opp_first_delivery">First delivery target</label>
+              <input id="opp_first_delivery" type="date" className="input"
+                value={form.first_delivery_date ?? ''}
+                onChange={(e) => setForm({ ...form, first_delivery_date: e.target.value || null })} />
+            </div>
+            <div>
+              <label className="label" htmlFor="opp_latest_delivery">Latest delivery target (all capacity)</label>
+              <input id="opp_latest_delivery" type="date" className="input"
+                value={form.latest_delivery_date ?? ''}
+                onChange={(e) => setForm({ ...form, latest_delivery_date: e.target.value || null })} />
+            </div>
+            <div>
+              <label className="label" htmlFor="opp_upfront">Upfront Payment (% of Committed Value)</label>
+              <input id="opp_upfront" type="number" min={0.01} max={99.99} step="0.01" className="input"
+                placeholder="e.g. 30"
+                value={form.upfront_pct}
+                onChange={(e) => setForm({ ...form, upfront_pct: e.target.value })} />
+              <p className="mt-1 text-xs text-grape-soft">Greater than 0% and less than 100%. No default.</p>
+            </div>
+            <div>
+              <label className="label" htmlFor="opp_pay_structure">Payment structure (balance)</label>
+              <select id="opp_pay_structure" className="input" value={form.payment_structure}
+                onChange={(e) => setForm({ ...form, payment_structure: e.target.value })}>
+                <option value="">Not decided</option>
+                <option value="A">A. Monthly installments</option>
+                <option value="B">B. Quarterly installments + deposit</option>
+                <option value="C">C. Monthly installments + Security</option>
+                <option value="D">D. Other balance schedule</option>
+              </select>
+            </div>
+          </div>
 
             </div>
           </div>

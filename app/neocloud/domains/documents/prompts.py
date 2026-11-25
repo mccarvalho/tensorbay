@@ -7,8 +7,8 @@ SYSTEM_PROMPT = (
     "- Use only facts that appear in the DEAL DATA, the REFERENCE DOCUMENTS or the reviewer's NOTES. Never "
     "invent names, addresses, registration numbers, prices, dates, bank details or legal terms.\n"
     "- Where a needed fact is missing, write [TO BE COMPLETED] in its place.\n"
-    "- Follow TensorBay's standard terms in the reference MSA (acceptance, service levels, payment, security, "
-    "escrow). When a deal needs something the MSA does not say, keep it minimal and mark it [FOR LEGAL REVIEW].\n"
+    "- Follow TensorBay's standard terms in the reference MSA (delivery, acceptance, service levels, "
+    "upfront payment, escrow under Schedule D-1, security). When a deal needs something the MSA does not say, keep it minimal and mark it [FOR LEGAL REVIEW].\n"
     "- Do not invent payment terms (prepayment, billing in arrears, net days, late fees), SLA numbers or "
     "support terms. Take them from the DEAL DATA, the NOTES or the reference MSA; otherwise write "
     "[TO BE COMPLETED]. In customer-facing text say \"monthly fee\", never \"MRR\" or \"probability\".\n"
@@ -31,28 +31,12 @@ INSTRUCTIONS: dict[str, str] = {
         "and data transfer if known, commercial terms, validity. Use the pricing in the DEAL DATA exactly. "
         "Billing basis is 730 GPU-hours per month per GPU."
     ),
-    "ORDER_FORM": (
-        "Write a standalone Order Form that sits under TensorBay's Master Services Agreement. Mirror the fields "
-        "of Schedule A of the reference MSA (customer, platform, quantity, per node or rack, compute fabric, "
-        "storage, connectivity, facility, target commencement, term, rate, committed value, payment structure, "
-        "security, acceptance, support and SLA, renewal, payment instructions, contacts, special terms) as a "
-        "two-column table, then a signature block for both parties. Fill what the DEAL DATA supports; leave the "
-        "rest as [TO BE COMPLETED]."
-    ),
     "POC_AGREEMENT": (
         "Write a short Proof of Concept Agreement (paid PoC, up to 7 days) under TensorBay's MSA. Include "
         "parties, purpose and scope (GPU model and quantity in the DEAL DATA), duration, fee and payment before "
         "start, success criteria (use the Schedule B tests of the reference MSA as the basis), access and "
         "acceptable use, confidentiality (refer to the MSA or NDA), conversion to a full Order Form, no "
         "obligation to proceed, and signatures."
-    ),
-    "ESCROW_AGREEMENT": (
-        "Write the commercial escrow terms sheet and instruction letter for this deal, based on Schedule D "
-        "Part 2 of the reference MSA: escrow agent [TO BE COMPLETED unless given in the notes], amount (number of months of Fees: only if given in the "
-        "DEAL DATA or NOTES, otherwise [TO BE COMPLETED]), funding deadline, monthly release to TensorBay, replenishment, release on acceleration, "
-        "release of the balance at the end of the Term, fees borne by the customer. State that this is a "
-        "commercial summary and that the escrow agent's own documents govern the account. Add signature "
-        "blocks."
     ),
     "ACCEPTANCE_NOTICE": (
         "Write the Readiness Notice and Acceptance Certificate pair for this deal, based on Section 4 and "

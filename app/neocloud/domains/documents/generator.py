@@ -31,7 +31,8 @@ TYPE_TITLE: dict[str, str] = {
     "POC_AGREEMENT": "PoC Agreement", "ESCROW_AGREEMENT": "Escrow Agreement",
     "ACCEPTANCE_NOTICE": "Acceptance Notice", "LOI": "Letter of Intent", "CONTRACT": "Contract",
 }
-FILLED_FORMS = {"MSA", "NDA"}  # standard forms filled in, never rewritten by AI
+# Standard forms (package V4) are filled in, never rewritten by AI: document type -> template name.
+FILLED_FORMS = {"MSA": "MSA", "NDA": "NDA", "ORDER_FORM": "ORDER_FORM", "ESCROW_AGREEMENT": "ESCROW"}
 
 
 def file_name_for(doc_type: str, customer: str, version: int, today: datetime | None = None) -> str:
@@ -67,17 +68,21 @@ def build_document(
     """Blocking. Returns (docx bytes, markdown or None for filled forms)."""
     opp = ctx["opportunity"]
     if doc_type in FILLED_FORMS:
-        template = base.template(doc_type)
+        template = base.template(FILLED_FORMS[doc_type])
+        if doc_type == "NDA":
+            return forms.fill_nda(template, ctx, notes), None
+        if doc_type == "ESCROW_AGREEMENT":
+            return forms.fill_escrow(template, ctx, notes), None
+        # MSA and Order Form share Schedule A; the only AI-written line is the per node spec.
         spec_line: str | None = None
-        if doc_type == "MSA":
-            specs = _spec_names(base, opp["gpu_model"])
-            if specs:
-                try:
-                    spec_line = svc.complete(prompts.SPEC_LINE_PROMPT, base.text(specs[0], 6000), max_tokens=400).strip().splitlines()[0]
-                except Exception as exc:  # noqa: BLE001 - the form is still usable with the blank
-                    logger.warning("msa_spec_line_failed", error=str(exc))
-            return forms.fill_msa(template, ctx, spec_line, notes), None
-        return forms.fill_nda(template, ctx, notes), None
+        specs = _spec_names(base, opp["gpu_model"])
+        if specs:
+            try:
+                spec_line = svc.complete(prompts.SPEC_LINE_PROMPT, base.text(specs[0], 6000), max_tokens=400).strip().splitlines()[0]
+            except Exception as exc:  # noqa: BLE001 - the form is still usable with the blank
+                logger.warning("spec_line_failed", error=str(exc))
+        fill = forms.fill_msa if doc_type == "MSA" else forms.fill_order_form
+        return fill(template, ctx, spec_line, notes), None
 
     kind = {"PROPOSAL": "PROP", "ORDER_FORM": "OF", "POC_AGREEMENT": "POC", "ESCROW_AGREEMENT": "ESC",
             "ACCEPTANCE_NOTICE": "ACC", "LOI": "LOI", "CONTRACT": "CON"}.get(doc_type, doc_type)

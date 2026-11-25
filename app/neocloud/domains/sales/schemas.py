@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,6 +29,10 @@ class OpportunityBase(BaseModel):
     assigned_to: str | None = Field(default=None, max_length=255)
     next_action: str | None = Field(default=None, max_length=255)
     escrow_required: bool = True
+    upfront_pct: Decimal | None = Field(default=None, gt=0, lt=100)
+    payment_structure: Literal["A", "B", "C", "D"] | None = None
+    first_delivery_date: date | None = None
+    latest_delivery_date: date | None = None
     account_owner: str | None = None
     account_owner_email: str | None = None
     account_owner_sub: str | None = None
@@ -53,6 +58,10 @@ class OpportunityUpdate(BaseModel):
     assigned_to: str | None = Field(default=None, max_length=255)
     next_action: str | None = Field(default=None, max_length=255)
     escrow_required: bool | None = None
+    upfront_pct: Decimal | None = Field(default=None, gt=0, lt=100)
+    payment_structure: Literal["A", "B", "C", "D"] | None = None
+    first_delivery_date: date | None = None
+    latest_delivery_date: date | None = None
     account_owner: str | None = None
     account_owner_email: str | None = None
     account_owner_sub: str | None = None

@@ -19,6 +19,7 @@ import {
 import DealDocuments from '../components/DealDocuments';
 import OrderFormIntakePanel from '../components/OrderFormIntakePanel';
 import { STAGE_LABEL, STAGE_TONE, type SalesStage } from '../salesStages';
+import { fmtDate } from '../dates';
 
 type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
 
@@ -109,7 +110,7 @@ export default function OpportunityDetail() {
         <KpiCard label="Expected MRR" value={money(o.expected_mrr)} accent="cyan" />
         <KpiCard label="Model" value={o.commercial_model} accent="grape" />
         <KpiCard label="Term" value={`${o.duration_months} mo`} accent="white" />
-        <KpiCard label="Start" value={o.expected_start ?? '—'} accent="white" />
+        <KpiCard label="Start" value={fmtDate(o.expected_start) || '—'} accent="white" />
       </div>
 
       <section className="flex flex-col gap-4">
@@ -128,7 +129,7 @@ export default function OpportunityDetail() {
                   <span className="font-semibold text-white">{quote.quote_number}</span>
                   <Badge tone={QUOTE_TONE[quote.status]}>{quote.status}</Badge>
                   <span className="text-xs text-grape-soft">{quote.term_months} mo</span>
-                  {quote.valid_until && <span className="text-xs text-grape-soft">· valid until {quote.valid_until}</span>}
+                  {quote.valid_until && <span className="text-xs text-grape-soft">· valid until {fmtDate(quote.valid_until)}</span>}
                 </div>
                 <span className="text-sm font-semibold text-cyan">{money(quote.total_amount)}</span>
               </div>

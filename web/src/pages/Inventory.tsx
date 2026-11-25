@@ -17,6 +17,7 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import DateInput from '../components/DateInput';
 
 // --------------------------------------------------------------------------- //
 type OperationalStatus = 'ONLINE' | 'OFFLINE' | 'MAINTENANCE' | 'FAILED' | 'DECOMMISSIONED';
@@ -540,7 +541,7 @@ function GpusTab({ canWrite }: { canWrite: boolean }) {
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Field label="Acquisition Cost (USD)"><input type="number" min={0} step="0.01" className="input" value={form.acquisition_cost} onChange={(e) => setForm({ ...form, acquisition_cost: e.target.value })} /></Field>
-            <Field label="Acquisition Date"><input type="date" className="input" value={form.acquisition_date} onChange={(e) => setForm({ ...form, acquisition_date: e.target.value })} /></Field>
+            <Field label="Acquisition Date"><DateInput className="input" value={form.acquisition_date} onChange={(e) => setForm({ ...form, acquisition_date: e.target.value })} /></Field>
             <Field label="Supplier"><input className="input" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} /></Field>
           </div>
           <div className="grid grid-cols-3 gap-4">

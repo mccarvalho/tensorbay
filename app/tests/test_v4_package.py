@@ -58,7 +58,7 @@ def test_msa_v4_is_filled_including_schedule_a():
     for needle in ["FOXGAROO LTDA", "TB-MSA-FOXGAROO-202611", "Order Form No. TB-OF-FOXGAROO-202611",
                    "a limited liability company organized under the laws of Brazil", "registration number 12.345.678/0001-90",
                    "☒ NVIDIA HGX B300 (air-cooled)", "☒ NVIDIA Quantum InfiniBand (NDR)", "approx. 500 TB usable",
-                   "First target: 30 / 01 / 2027. Latest original target (all capacity): 30 / 06 / 2027.",
+                   "First target: 01/30/2027. Latest original target (all capacity): 06/30/2027.",
                    "Agreed advance: 30% of Committed Value = US$ 10,800,000.00", "☒ A. Monthly installments",
                    "☒ Escrow (after cutoff)", "Escrow amount: US$ 10,800,000.00 (= advance)",
                    "Committed Value less Upfront Payment = US$ 25,200,000.00.", "☒ Single Cluster"]:
@@ -72,7 +72,7 @@ def test_order_form_v4_is_filled():
     assert "between TensorBay Technology, LLC and Foxgaroo Ltda." in t and "Order Form accepted for Foxgaroo Ltda" in t
     assert "US$ 36,000,000.00 (512 GPUs × 26,280 hours × Rate)" in t
     assert "Only amendments identifying the MSA section" in t and "[Draft note, to be reviewed] net terms to confirm" in t
-    assert re.search(r"1\n512\n30 / 06 / 2027\n36,000,000.00\n10,800,000.00\n25,200,000.00", t)
+    assert re.search(r"1\n512\n06/30/2027\n36,000,000.00\n10,800,000.00\n25,200,000.00", t)
 
 
 def test_escrow_agreement_v4_is_filled_without_breaking_blanks_it_does_not_know():
@@ -81,6 +81,6 @@ def test_escrow_agreement_v4_is_filled_without_breaking_blanks_it_does_not_know(
     assert "Order Form No.: TB-OF-FOXGAROO-202611  Order Effective Date: _____________" in t
     assert "Legal entity: Foxgaroo Ltda" in t and "Registered jurisdiction: Brazil" in t
     assert "Agreed Upfront Payment (% of Committed Value): 30%" in t and "Agreed Upfront Payment (USD): 10,800,000.00" in t
-    assert "latest target: 30 / 06 / 2027" in t and "Customer: Ana Souza, ana@fox.com" in t
+    assert "latest target: 06/30/2027" in t and "Customer: Ana Souza, ana@fox.com" in t
     assert "Foxgaroo Ltda (Customer)" in t and "Name: Ana Souza" in t and "Title: CEO" in t
     assert "Legal name: ___________________________________" in t  # the escrow agent is still to be completed

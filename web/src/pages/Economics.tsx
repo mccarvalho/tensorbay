@@ -19,6 +19,7 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import DateInput from '../components/DateInput';
 
 // --------------------------------------------------------------------------- //
 // Types (mirror backend schemas)
@@ -407,7 +408,7 @@ function DealsTab() {
                 <option value="">—</option>{finders.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select></div>
           )}
-          <div><label className="label">Booked date</label><input className="input" type="date" required value={form.booked_date} onChange={(e) => setForm({ ...form, booked_date: e.target.value })} /></div>
+          <div><label className="label">Booked date</label><DateInput className="input" required value={form.booked_date} onChange={(e) => setForm({ ...form, booked_date: e.target.value })} /></div>
           <div className="mt-2 flex justify-end gap-3">
             <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Create (pending approval)'}</button>
@@ -584,7 +585,7 @@ function CostsTab() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="label">Amount (USD)</label><input className="input" type="number" min="0" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
-            <div><label className="label">Incurred on</label><input className="input" type="date" value={form.incurred_on} onChange={(e) => setForm({ ...form, incurred_on: e.target.value })} /></div>
+            <div><label className="label">Incurred on</label><DateInput className="input" value={form.incurred_on} onChange={(e) => setForm({ ...form, incurred_on: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="label">Customer ID (optional)</label><input className="input" value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} /></div>

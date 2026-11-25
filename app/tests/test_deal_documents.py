@@ -181,6 +181,7 @@ async def test_proposal_is_generated_downloaded_and_filed_in_drive(client, env):
     # The prompt carries the deal data, the reviewer notes and the knowledge base, with TensorBay branding.
     system, user = env.prompts[-1]
     assert "TensorBay" in system and "NeoCloud" not in system
+    assert "MM/DD/YYYY" in system  # the date standard reaches the AI drafts
     assert "Foxgaroo Ltda" in user and "Escrow agent: JPMorgan" in user and "text of TensorBay_Spec_NVIDIA_HGX_B300" in user
     assert '"gpus": 512' in user and '"implied_rate_usd_per_gpu_hour": "2.6755"' in user
     # DOCX: stored in S3 and downloadable.
@@ -216,7 +217,7 @@ async def test_msa_fills_the_standard_form_instead_of_rewriting_it(client, env):
     assert "64 nodes / racks · 512 GPUs · ______ CPUs" in text
     assert "8 GPUs, 288 GB HBM3e each" in text
     assert "Region (if agreed): Brazil (São Paulo)" in text
-    assert "First target: 30 / 01 / 2027. Latest original target (all capacity): 30 / 06 / 2027." in text
+    assert "First target: 01/30/2027. Latest original target (all capacity): 06/30/2027." in text
     assert "36 months for each accepted" in text and "US$ 2.6755 per GPU-hour" in text
     assert "US$ 36,000,000.00 (512 GPUs × 26,280 hours × Rate)" in text
     # V4: negotiated advance, structure, route and the balance.
@@ -228,7 +229,7 @@ async def test_msa_fills_the_standard_form_instead_of_rewriting_it(client, env):
     # Tranche table: one Cluster carries the whole deal.
     d = docx.Document(io.BytesIO(data))
     rows = [[c.text for c in r.cells] for t in d.tables for r in t.rows if r.cells[0].text in ("1", "TOTAL")]
-    assert rows[0] == ["1", "512", "30 / 06 / 2027", "36,000,000.00", "10,800,000.00", "25,200,000.00"]
+    assert rows[0] == ["1", "512", "06/30/2027", "36,000,000.00", "10,800,000.00", "25,200,000.00"]
     assert rows[1] == ["TOTAL", "512", "________", "36,000,000.00", "10,800,000.00", "25,200,000.00"]
     assert "[Draft note, to be reviewed] Net 30 on the balance" in text
 
@@ -257,7 +258,7 @@ async def test_order_form_and_escrow_agreement_are_filled_forms(client, env):
     assert "Reference: TB-ESC-POSITIVO-" in e_text and "Order Form No.: TB-OF-POSITIVO-" in e_text
     assert "Legal entity: Foxgaroo Ltda" in e_text and "Registered jurisdiction: Brazil" in e_text
     assert "Committed Value (USD): 36,000,000.00" in e_text and "(% of Committed Value): 30%" in e_text
-    assert "Agreed Upfront Payment (USD): 10,800,000.00" in e_text and "latest target: 30 / 06 / 2027" in e_text
+    assert "Agreed Upfront Payment (USD): 10,800,000.00" in e_text and "latest target: 06/30/2027" in e_text
     assert "Customer: Ana Souza" in e_text
     # Only the Order Form's per-node spec line used the model; the escrow agreement used none.
     assert len(env.prompts) == 1 and "ONE line" in env.prompts[0][0]

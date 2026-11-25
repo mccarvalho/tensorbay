@@ -4,6 +4,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { config } from '../config';
+import DateInput from '../components/DateInput';
+import { fmtDate } from '../dates';
 
 interface FormInfo {
   status: 'PENDING' | 'SUBMITTED';
@@ -211,7 +213,7 @@ export default function CustomerIntake() {
         <p className="mt-2 text-sm text-grape-soft">
           To prepare your Master Services Agreement and Order Form for{' '}
           <b className="text-white">{info.quantity.toLocaleString('en-US')} × {info.gpu_model}</b>, please complete the details below.
-          Fields marked <span className="text-flamingo">*</span> are required. The link expires on {new Date(info.expires_at).toLocaleDateString('en-US', { dateStyle: 'long' })}.
+          Fields marked <span className="text-flamingo">*</span> are required. The link expires on {fmtDate(info.expires_at)}.
         </p>
         {error && <p className="mt-3 rounded-xl bg-flamingo/10 p-3 text-sm text-flamingo" role="alert" data-testid="intake-error">{error}</p>}
       </div>
@@ -286,7 +288,7 @@ export default function CustomerIntake() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {text('region_preference', 'Preferred region or site')}
           <FieldBox id="preferred_start_date" label="Preferred start date" error={fieldErrors.preferred_start_date}>
-            <input id="f_preferred_start_date" className="input" type="date" value={v.preferred_start_date} onChange={(e) => set('preferred_start_date', e.target.value)} />
+            <DateInput id="f_preferred_start_date" className="input" value={v.preferred_start_date} onChange={(e) => set('preferred_start_date', e.target.value)} />
           </FieldBox>
         </div>
         {area('additional_notes', 'Anything else we should know', { rows: 3 })}

@@ -22,6 +22,7 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import { fmtDateTime } from '../dates';
 
 type LeadStatus = 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'CONVERTED' | 'DISQUALIFIED';
 
@@ -79,7 +80,7 @@ function isManager(): boolean {
 }
 
 const place = (l: Lead) => [l.region, l.country].filter(Boolean).join(' · ') || '—';
-const when = (iso: string) => new Date(iso).toLocaleString();
+const when = (iso: string) => fmtDateTime(iso);
 
 export default function Leads() {
   const qc = useQueryClient();

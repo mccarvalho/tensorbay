@@ -16,6 +16,8 @@ SYSTEM_PROMPT = (
     "- DEAL DATA may include \"customer_intake\": details the customer typed in themselves (legal entity, "
     "registration number, address, signatory, contacts, technical needs, workload). Prefer it over the CRM "
     "record for the customer's legal details and contacts, and use the workload to tailor the text.\n"
+    "- Write every date as MM/DD/YYYY (for example 06/30/2027). Dates in DEAL DATA are ISO (YYYY-MM-DD): "
+    "convert them.\n"
     "- Never include passport, EIN or LLC formation details.\n"
     "- The party is called \"TensorBay\", never any other platform name.\n"
     "- Output Markdown only: # title, ## sections, bullet lists, numbered clauses, and pipe tables for "

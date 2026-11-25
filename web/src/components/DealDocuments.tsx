@@ -8,6 +8,7 @@ import { config } from '../config';
 import { hasPermission } from '../permissions';
 import { useToast, errMessage } from './toast';
 import { Badge, EmptyState, ErrorState, Spinner, type BadgeTone } from './ui';
+import { fmtDateTime } from '../dates';
 
 type DealDocType =
   | 'MSA' | 'ORDER_FORM' | 'NDA' | 'PROPOSAL' | 'POC_AGREEMENT' | 'ESCROW_AGREEMENT' | 'ACCEPTANCE_NOTICE';
@@ -146,7 +147,7 @@ export default function DealDocuments({ opportunityId }: { opportunityId: string
                   <span className="font-semibold text-white">{TYPE_LABEL[d.doc_type] ?? d.doc_type}</span>
                   <span className="text-xs text-grape-soft">v{d.version}</span>
                   <Badge tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Badge>
-                  <span className="text-xs text-grape-soft">{new Date(d.created_at).toLocaleString()}</span>
+                  <span className="text-xs text-grape-soft">{fmtDateTime(d.created_at)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {d.status !== 'GENERATING' && d.status !== 'FAILED' && (

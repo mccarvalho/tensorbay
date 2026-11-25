@@ -44,8 +44,8 @@ test('add an opportunity from a customer and from a lead', async ({ page, playwr
     // Order Form (V4) fields.
     await page.locator('#opp_upfront').fill('30');
     await page.locator('#opp_pay_structure').selectOption('B');
-    await page.locator('#opp_first_delivery').fill('2027-01-30');
-    await page.locator('#opp_latest_delivery').fill('2027-06-30');
+    await page.locator('#opp_first_delivery').fill('01/30/2027');
+    await page.locator('#opp_latest_delivery').fill('06/30/2027');
     await page.getByRole('button', { name: 'Create Opportunity' }).click();
     await expect.poll(async () => (await oppsOf(api, cust.id)).length).toBe(1);
     const first = (await oppsOf(api, cust.id))[0];

@@ -17,6 +17,8 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import DateInput from '../components/DateInput';
+import { fmtDate } from '../dates';
 
 type ContractStatus = 'DRAFT' | 'ACTIVE' | 'AMENDED' | 'RENEWED' | 'TERMINATED' | 'EXPIRED';
 const CONTRACT_STATUSES: ContractStatus[] = ['DRAFT', 'ACTIVE', 'AMENDED', 'RENEWED', 'TERMINATED', 'EXPIRED'];
@@ -121,7 +123,7 @@ export default function Contracts() {
     { key: 'customer_id', header: 'Customer', render: (c) => customerName(c.customer_id) },
     { key: 'term_months', header: 'Term', render: (c) => `${c.term_months} mo` },
     { key: 'auto_renew', header: 'Auto-renew', render: (c) => (c.auto_renew ? <Badge tone="cyan">Yes</Badge> : <Badge tone="neutral">No</Badge>) },
-    { key: 'start_date', header: 'Start', render: (c) => c.start_date ?? '—' },
+    { key: 'start_date', header: 'Start', render: (c) => fmtDate(c.start_date) || '—' },
     { key: 'status', header: 'Status', render: (c) => <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge> },
     {
       key: 'actions', header: '', className: 'text-right',
@@ -202,12 +204,12 @@ export default function Contracts() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label" htmlFor="ctr_start">Start Date</label>
-                  <input id="ctr_start" type="date" className="input" value={form.start_date ?? ''}
+                  <DateInput id="ctr_start" className="input" value={form.start_date ?? ''}
                     onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} />
                 </div>
                 <div>
                   <label className="label" htmlFor="ctr_end">End Date</label>
-                  <input id="ctr_end" type="date" className="input" value={form.end_date ?? ''}
+                  <DateInput id="ctr_end" className="input" value={form.end_date ?? ''}
                     onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} />
                 </div>
               </div>

@@ -18,6 +18,8 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import DateInput from '../components/DateInput';
+import { fmtDate, fmtDateTime } from '../dates';
 
 // --------------------------------------------------------------------------- //
 type ContactType = 'COMMERCIAL' | 'TECHNICAL' | 'FINANCE' | 'BILLING' | 'EXECUTIVE';
@@ -85,10 +87,7 @@ const ACTIVITY_ICON: Record<ActivityType, string> = {
   CALL: '📞', EMAIL: '✉️', MEETING: '🤝', NOTE: '📝', DEMO: '🖥️', SLACK: '💬', OTHER: '•',
 };
 
-const fmtDateTime = (s: string): string =>
-  new Date(s).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-const fmtDate = (s: string): string =>
-  new Date(s + 'T00:00:00').toLocaleDateString('en-US', { dateStyle: 'medium' });
+
 // <input type="datetime-local"> works in local time without a zone.
 const toLocalInput = (iso: string): string => {
   const d = new Date(iso);
@@ -441,7 +440,7 @@ function ActivityModal({
           </div>
           <div>
             <label className="label" htmlFor="a_follow">Next Follow-up</label>
-            <input id="a_follow" type="date" className="input" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
+            <DateInput id="a_follow" className="input" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
           </div>
         </div>
         {mut.isError && <ErrorState error={mut.error} />}

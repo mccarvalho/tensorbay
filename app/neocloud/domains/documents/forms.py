@@ -44,10 +44,11 @@ def _tick(text: str, label: str) -> str:
 
 
 def _fmt_date(iso: str | None) -> str | None:
+    """TensorBay's date standard in documents: MM/DD/YYYY."""
     if not iso:
         return None
     d = date.fromisoformat(iso)
-    return f"{d.day:02d} / {d.month:02d} / {d.year}"
+    return f"{d.month:02d}/{d.day:02d}/{d.year}"
 
 
 def _one_line(text: str) -> str:

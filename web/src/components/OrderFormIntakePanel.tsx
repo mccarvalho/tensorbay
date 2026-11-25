@@ -6,6 +6,7 @@ import { api } from '../api';
 import { hasPermission } from '../permissions';
 import { useToast, errMessage } from './toast';
 import { Badge, ErrorState, Spinner } from './ui';
+import { fmtDateTime } from '../dates';
 
 interface Intake {
   id: string;
@@ -33,7 +34,7 @@ const FIELDS: Array<[string, string]> = [
 
 const show = (v: unknown): string => (Array.isArray(v) ? v.join(', ') : v === null || v === undefined ? '' : String(v));
 const linkFor = (token: string) => `${window.location.origin}/intake/${token}`;
-const when = (s: string) => new Date(s).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+const when = fmtDateTime;
 
 export default function OrderFormIntakePanel({ opportunityId }: { opportunityId: string }) {
   const qc = useQueryClient();

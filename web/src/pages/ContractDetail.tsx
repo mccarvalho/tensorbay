@@ -16,6 +16,7 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import { fmtDate } from '../dates';
 
 type ContractStatus = 'DRAFT' | 'ACTIVE' | 'AMENDED' | 'RENEWED' | 'TERMINATED' | 'EXPIRED';
 
@@ -97,8 +98,8 @@ export default function ContractDetail() {
   const resCols: Array<Column<Reservation>> = [
     { key: 'gpu_model', header: 'GPU Model', render: (r) => <Badge tone="grape">{r.gpu_model}</Badge> },
     { key: 'quantity', header: 'Qty', render: (r) => r.quantity.toLocaleString('en-US') },
-    { key: 'start_date', header: 'Start' },
-    { key: 'end_date', header: 'End', render: (r) => r.end_date ?? '—' },
+    { key: 'start_date', header: 'Start', render: (r) => fmtDate(r.start_date) || '—' },
+    { key: 'end_date', header: 'End', render: (r) => fmtDate(r.end_date) || '—' },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={RES_TONE[r.status] ?? 'neutral'}>{r.status}</Badge> },
   ];
 

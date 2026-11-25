@@ -10,6 +10,7 @@ import {
   SectionHeader, Spinner, ErrorState, EmptyState, DataTable, Badge, Modal,
   type Column,
 } from '../components/ui';
+import { fmtDateTime } from '../dates';
 
 interface Mailbox {
   id: string; address: string; enabled: boolean; capture_unmatched: boolean;
@@ -25,7 +26,7 @@ interface Unmatched {
 }
 interface CustomerLite { id: string; legal_name: string }
 
-const when = (iso: string) => new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+const when = (iso: string) => fmtDateTime(iso);
 
 export default function EmailSync() {
   const isAdmin = hasPermission('user.admin');

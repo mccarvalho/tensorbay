@@ -36,7 +36,7 @@ test('supply order by totals + forecast', async ({ page, playwright }) => {
     // First lot: 16 servers on 30 Jan; the other 48 stay "no date yet".
     await page.getByLabel('Lot 1 name').fill('Lote 1');
     await page.getByLabel('Lot 1 servers').fill('16');
-    await page.getByLabel('Lot 1 expected delivery').fill('2027-01-30');
+    await page.getByLabel('Lot 1 expected delivery').fill('01/30/2027');
     await expect(page.getByText('48 servers without a date')).toBeVisible();
     await page.getByRole('button', { name: 'Create order' }).click();
 
@@ -60,7 +60,7 @@ test('supply order by totals + forecast', async ({ page, playwright }) => {
 
     // Mark lot 1 delivered through the lot editor.
     await card.getByRole('row', { name: /Lote 1/ }).getByRole('button', { name: 'Edit' }).click();
-    await page.locator('#lot_ad').fill('2027-02-02');
+    await page.locator('#lot_ad').fill('02/02/2027');
     await page.getByRole('button', { name: 'Save lot' }).click();
     await expect(card.getByRole('row', { name: /Lote 1/ })).toContainText('DELIVERED');
     await expect(card).toContainText('128 delivered');

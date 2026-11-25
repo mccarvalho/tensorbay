@@ -11,6 +11,7 @@ import {
 } from '../salesStages';
 import { Badge, ErrorState, Modal, Spinner, type BadgeTone } from './ui';
 import { useToast, errMessage } from './toast';
+import DateInput from './DateInput';
 
 type AvailabilityStatus = 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE';
 
@@ -379,8 +380,8 @@ export default function OpportunityFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="opp_start">Expected Start</label>
-              <input
-                id="opp_start" type="date" className="input"
+              <DateInput
+                id="opp_start" className="input"
                 value={form.expected_start ?? ''}
                 onChange={(e) => setForm({ ...form, expected_start: e.target.value || null })}
               />
@@ -447,13 +448,13 @@ export default function OpportunityFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="opp_first_delivery">First delivery target</label>
-              <input id="opp_first_delivery" type="date" className="input"
+              <DateInput id="opp_first_delivery" className="input"
                 value={form.first_delivery_date ?? ''}
                 onChange={(e) => setForm({ ...form, first_delivery_date: e.target.value || null })} />
             </div>
             <div>
               <label className="label" htmlFor="opp_latest_delivery">Latest delivery target (all capacity)</label>
-              <input id="opp_latest_delivery" type="date" className="input"
+              <DateInput id="opp_latest_delivery" className="input"
                 value={form.latest_delivery_date ?? ''}
                 onChange={(e) => setForm({ ...form, latest_delivery_date: e.target.value || null })} />
             </div>

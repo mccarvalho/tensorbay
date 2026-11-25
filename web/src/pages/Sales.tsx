@@ -25,6 +25,8 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import DateInput from '../components/DateInput';
+import { fmtDate } from '../dates';
 
 // --------------------------------------------------------------------------- //
 // Types (mirror the backend contract)
@@ -489,7 +491,7 @@ function QuotesModal({
                     <div className="font-semibold text-white">{qt.quote_number}</div>
                     <div className="text-xs text-grape-soft">
                       {qt.term_months} mo · {qt.items.length} line{qt.items.length === 1 ? '' : 's'}
-                      {qt.valid_until ? ` · valid to ${qt.valid_until}` : ''}
+                      {qt.valid_until ? ` · valid to ${fmtDate(qt.valid_until)}` : ''}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -527,7 +529,7 @@ function QuotesModal({
               </div>
               <div>
                 <label className="label" htmlFor="q_valid">Valid Until</label>
-                <input id="q_valid" type="date" className="input" value={validUntil}
+                <DateInput id="q_valid" className="input" value={validUntil}
                   onChange={(e) => setValidUntil(e.target.value)} />
               </div>
               <div>

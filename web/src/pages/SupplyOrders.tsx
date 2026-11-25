@@ -10,6 +10,8 @@ import { hasPermission } from '../permissions';
 import { GPU_MODELS, PROCUREMENT_STATUSES, type ProcurementStatus } from '../constants';
 import { useToast, errMessage } from '../components/toast';
 import { Badge, DataTable, EmptyState, ErrorState, Modal, Spinner, type BadgeTone, type Column } from '../components/ui';
+import DateInput from '../components/DateInput';
+import { fmtDate as fmtIsoDate } from '../dates';
 
 interface Lot {
   id: string; lot_label: string | null; quantity: number; servers: number | null; status: ProcurementStatus;
@@ -41,7 +43,7 @@ const TONE: Record<ProcurementStatus, BadgeTone> = {
 const n = (v: number) => v.toLocaleString('en-US');
 const money = (v: string | number | null, cur: string | null) =>
   v == null ? '—' : Number(v).toLocaleString('en-US', { style: 'currency', currency: cur || 'USD', maximumFractionDigits: 2 });
-const fmtDate = (d: string | null) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—');
+const fmtDate = (d: string | null) => fmtIsoDate(d) || '—';
 const fmtMonth = (ym: string) => {
   const [y, m] = ym.split('-');
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
@@ -336,7 +338,7 @@ function OrderModal({ order, suppliers, onClose, onSaved }: {
               {PROCUREMENT_STATUSES.filter((s) => s === 'NEGOTIATING' || s === 'ORDERED').map((s) => <option key={s} value={s}>{s}</option>)}
             </select></div>
           <div><label className="label" htmlFor="so_signed">Signed on</label>
-            <input id="so_signed" className="input" type="date" value={f.signed_on} onChange={set('signed_on')} /></div>
+            <DateInput id="so_signed" className="input" value={f.signed_on} onChange={set('signed_on')} /></div>
           <div><label className="label" htmlFor="so_quote">Supplier quote #</label>
             <input id="so_quote" className="input" value={f.supplier_quote} onChange={set('supplier_quote')} /></div>
           <div><label className="label" htmlFor="so_asm">Assembly site</label>
@@ -364,9 +366,9 @@ function OrderModal({ order, suppliers, onClose, onSaved }: {
                 <input className="input" aria-label={`Lot ${i + 1} name`} value={l.label} onChange={(e) => setLots(lots.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
                 <input className="input" type="number" min={1} aria-label={`Lot ${i + 1} servers`} placeholder="servers" value={l.servers}
                   onChange={(e) => setLots(lots.map((x, j) => j === i ? { ...x, servers: e.target.value } : x))} />
-                <input className="input" type="date" aria-label={`Lot ${i + 1} expected delivery`} title="Expected delivery" value={l.expected_delivery}
+                <DateInput className="input" aria-label={`Lot ${i + 1} expected delivery`} title="Expected delivery" value={l.expected_delivery}
                   onChange={(e) => setLots(lots.map((x, j) => j === i ? { ...x, expected_delivery: e.target.value } : x))} />
-                <input className="input" type="date" aria-label={`Lot ${i + 1} expected operational`} title="Expected operational (optional)" value={l.expected_operational}
+                <DateInput className="input" aria-label={`Lot ${i + 1} expected operational`} title="Expected operational (optional)" value={l.expected_operational}
                   onChange={(e) => setLots(lots.map((x, j) => j === i ? { ...x, expected_operational: e.target.value } : x))} />
                 <button type="button" className="btn-ghost text-xs" onClick={() => setLots(lots.length > 1 ? lots.filter((_, j) => j !== i) : [emptyLot(1)])}>Remove</button>
               </div>
@@ -431,11 +433,11 @@ function LotModal({ order, lot, onClose, onSaved }: { order: SupplyOrder; lot: L
             <select id="lot_status" className="input" value={f.status} onChange={set('status')}>
               {PROCUREMENT_STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
             </select></div>
-          <div><label className="label" htmlFor="lot_ed">Expected delivery</label><input id="lot_ed" className="input" type="date" value={f.expected_delivery} onChange={set('expected_delivery')} /></div>
-          <div><label className="label" htmlFor="lot_eo">Expected operational</label><input id="lot_eo" className="input" type="date" value={f.expected_operational} onChange={set('expected_operational')} /></div>
+          <div><label className="label" htmlFor="lot_ed">Expected delivery</label><DateInput id="lot_ed" className="input" value={f.expected_delivery} onChange={set('expected_delivery')} /></div>
+          <div><label className="label" htmlFor="lot_eo">Expected operational</label><DateInput id="lot_eo" className="input" value={f.expected_operational} onChange={set('expected_operational')} /></div>
           <div />
-          <div><label className="label" htmlFor="lot_ad">Delivered on</label><input id="lot_ad" className="input" type="date" value={f.actual_delivery} onChange={set('actual_delivery')} /></div>
-          <div><label className="label" htmlFor="lot_ao">Operational on</label><input id="lot_ao" className="input" type="date" value={f.actual_operational} onChange={set('actual_operational')} /></div>
+          <div><label className="label" htmlFor="lot_ad">Delivered on</label><DateInput id="lot_ad" className="input" value={f.actual_delivery} onChange={set('actual_delivery')} /></div>
+          <div><label className="label" htmlFor="lot_ao">Operational on</label><DateInput id="lot_ao" className="input" value={f.actual_operational} onChange={set('actual_operational')} /></div>
         </div>
         <div><label className="label" htmlFor="lot_notes">Notes</label><textarea id="lot_notes" className="input" rows={2} value={f.notes} onChange={set('notes')} /></div>
         <div className="flex justify-end gap-3">

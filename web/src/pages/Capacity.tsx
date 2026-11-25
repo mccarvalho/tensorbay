@@ -19,6 +19,7 @@ import {
   type Column,
 } from '../components/ui';
 import { SupplyForecast, SupplyOrdersSection } from './SupplyOrders';
+import DateInput from '../components/DateInput';
 
 interface Ledger {
   gpu_model: string;
@@ -419,12 +420,12 @@ function IncomingSection() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label" htmlFor="inc_del">Est. Delivery</label>
-                <input id="inc_del" type="date" className="input" value={form.expected_delivery}
+                <DateInput id="inc_del" className="input" value={form.expected_delivery}
                   onChange={(e) => setForm({ ...form, expected_delivery: e.target.value })} />
               </div>
               <div>
                 <label className="label" htmlFor="inc_op">Est. Operational</label>
-                <input id="inc_op" type="date" className="input" value={form.expected_operational}
+                <DateInput id="inc_op" className="input" value={form.expected_operational}
                   onChange={(e) => setForm({ ...form, expected_operational: e.target.value })} />
               </div>
             </div>
@@ -432,12 +433,12 @@ function IncomingSection() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label" htmlFor="inc_adel">Official Delivery</label>
-                <input id="inc_adel" type="date" className="input" value={form.actual_delivery}
+                <DateInput id="inc_adel" className="input" value={form.actual_delivery}
                   onChange={(e) => setForm({ ...form, actual_delivery: e.target.value })} />
               </div>
               <div>
                 <label className="label" htmlFor="inc_aop">Official Operational</label>
-                <input id="inc_aop" type="date" className="input" value={form.actual_operational}
+                <DateInput id="inc_aop" className="input" value={form.actual_operational}
                   onChange={(e) => setForm({ ...form, actual_operational: e.target.value })} />
               </div>
             </div>

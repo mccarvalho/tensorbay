@@ -13,6 +13,7 @@ import {
   ESCROW_STAGES, MACRO_STAGES, STAGE_HINT, STAGE_LABEL, STAGE_TONE, macroOf, stageLabel,
   type MacroStage, type SalesStage,
 } from '../salesStages';
+import { fmtDate } from '../dates';
 
 export interface BoardOpportunity {
   id: string;
@@ -69,8 +70,7 @@ const usdShort = (v: number): string =>
     ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(v)
     : usd(v);
 
-const shortDate = (iso: string): string =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const shortDate = (iso: string): string => fmtDate(iso);
 
 const stageOrder = (s: string): number => {
   const i = MACRO_STAGES.flatMap((m) => m.stages).indexOf(s as SalesStage);

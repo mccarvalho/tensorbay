@@ -20,6 +20,8 @@ import {
   type BadgeTone,
   type Column,
 } from '../components/ui';
+import DateInput from '../components/DateInput';
+import { fmtDate } from '../dates';
 
 // --------------------------------------------------------------------------- //
 type ReservationStatus = 'PENDING' | 'ACTIVE' | 'EXPIRED' | 'RELEASED' | 'CANCELLED';
@@ -155,7 +157,7 @@ export default function Reservations() {
     },
     { key: 'customer_id', header: 'Customer', render: (r) => customerName(r.customer_id) },
     { key: 'contract_id', header: 'Contract', render: (r) => contractNumber(r.contract_id) },
-    { key: 'start_date', header: 'Start' },
+    { key: 'start_date', header: 'Start', render: (r) => fmtDate(r.start_date) || '—' },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge> },
     {
       key: 'actions', header: '', className: 'text-right',
@@ -237,7 +239,7 @@ export default function Reservations() {
             </div>
             <div>
               <label className="label" htmlFor="res_start">Start Date</label>
-              <input id="res_start" type="date" className="input" required value={form.start_date}
+              <DateInput id="res_start" className="input" required value={form.start_date}
                 onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
             </div>
           </div>
@@ -245,7 +247,7 @@ export default function Reservations() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label" htmlFor="res_end">End Date</label>
-                <input id="res_end" type="date" className="input" value={form.end_date ?? ''}
+                <DateInput id="res_end" className="input" value={form.end_date ?? ''}
                   onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} />
               </div>
               <div>

@@ -42,14 +42,14 @@ test('supply order by totals + forecast', async ({ page, playwright }) => {
 
     const card = page.locator('article', { hasText: ref });
     await expect(card).toBeVisible();
+    orderId = (await card.getAttribute('data-testid'))!.replace('order-', '');
     await expect(card).toContainText('512 GPUs');
     await expect(card).toContainText('$51,590,510.51');
     await expect(card).toContainText('Lote 1');
     await expect(card).toContainText('16 servers · 128 GPUs');
     await expect(card).toContainText('Remaining (no date yet)');
     await expect(card).toContainText('48 servers · 384 GPUs');
-    await expect(card).toContainText('Next delivery: Jan 30, 2027');
-    orderId = (await card.getAttribute('data-testid'))!.replace('order-', '');
+    await expect(card).toContainText('Next delivery: 01/30/2027');
 
     // Forecast row for the model: 512 contracted, 384 without date, +128 in Jan 2027.
     const row = page.getByTestId('forecast-B300-E2E');

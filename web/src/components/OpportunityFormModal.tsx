@@ -225,8 +225,12 @@ export default function OpportunityFormModal({
   const isServerModel = form.commercial_model.includes('SERVER');
 
   return (
-      <Modal open={open} onClose={onClose} title={editing ? 'Edit Opportunity' : 'New Opportunity'}>
-        <form className="flex flex-col gap-4" onSubmit={submitOpp}>
+      <Modal open={open} onClose={onClose} size="wide" title={editing ? 'Edit Opportunity' : 'New Opportunity'}>
+        <form className="flex flex-col gap-5" onSubmit={submitOpp}>
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-2">
+            {/* Left: what is being sold */}
+            <div className="flex min-w-0 flex-col gap-4">
+              <span className="eyebrow">THE DEAL</span>
           <div>
             <label className="label" htmlFor="opp_customer">Customer</label>
             <select
@@ -304,7 +308,7 @@ export default function OpportunityFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="opp_mrr">Expected MRR (USD)</label>
               <input
@@ -321,6 +325,15 @@ export default function OpportunityFormModal({
                 onChange={(e) => setForm({ ...form, probability: Number(e.target.value) })}
               />
             </div>
+          </div>
+
+              {/* Capacity check gate */}
+              <CapacityCheckPanel gpuModel={form.gpu_model} quantity={form.quantity} />
+            </div>
+
+            {/* Right: where it is in the pipeline and who owns it */}
+            <div className="flex min-w-0 flex-col gap-4">
+              <span className="eyebrow">PIPELINE &amp; OWNERSHIP</span>
             <div>
               <label className="label" htmlFor="opp_stage">Stage</label>
               <select
@@ -343,8 +356,6 @@ export default function OpportunityFormModal({
                 <option value="LOST" title={STAGE_HINT.LOST}>Lost</option>
               </select>
             </div>
-          </div>
-
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="opp_start">Expected Start</label>
@@ -406,14 +417,15 @@ export default function OpportunityFormModal({
             This deal uses an escrow account (turn off to skip the Payment substages)
           </label>
 
-          {/* Capacity check gate */}
-          <CapacityCheckPanel gpuModel={form.gpu_model} quantity={form.quantity} />
+            </div>
+          </div>
 
           {(createMut.isError || updateMut.isError) && (
             <ErrorState error={createMut.error ?? updateMut.error} />
           )}
 
-          <div className="mt-2 flex justify-end gap-3">
+          {/* Stays in view while the form scrolls */}
+          <div className="sticky bottom-0 -mb-1 flex justify-end gap-3 border-t border-white/10 bg-space-700 py-3">
             <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={createMut.isPending || updateMut.isPending}>
               {createMut.isPending || updateMut.isPending

@@ -153,9 +153,11 @@ export interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** 'wide' is for forms with many fields (two columns); the default is a narrow dialog. */
+  size?: 'md' | 'wide';
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps): ReactElement | null {
+export function Modal({ open, onClose, title, children, size = 'md' }: ModalProps): ReactElement | null {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -176,12 +178,12 @@ export function Modal({ open, onClose, title, children }: ModalProps): ReactElem
       role="presentation"
     >
       <div
-        className="card-glow w-full max-w-lg"
+        className={`card-glow flex max-h-[calc(100vh-2rem)] w-full flex-col ${size === 'wide' ? 'max-w-5xl' : 'max-w-lg'}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex shrink-0 items-center justify-between">
           <h2 className="text-xl">{title}</h2>
           <button
             type="button"
@@ -192,7 +194,8 @@ export function Modal({ open, onClose, title, children }: ModalProps): ReactElem
             ✕
           </button>
         </div>
-        {children}
+        {/* The content scrolls inside the window, so the title and the page never get cut off. */}
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">{children}</div>
       </div>
     </div>
   );

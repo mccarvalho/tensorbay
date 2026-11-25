@@ -63,6 +63,12 @@ interface Props {
 const usd = (v: number): string =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
 
+/** Big GPU deals are tens or hundreds of millions: show "$98.8M" so it never overflows. */
+const usdShort = (v: number): string =>
+  Math.abs(v) >= 1_000_000
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(v)
+    : usd(v);
+
 const shortDate = (iso: string): string =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
@@ -141,8 +147,10 @@ export default function PipelineBoard({
         <div className="break-words text-xs text-grape-soft">
           {o.quantity.toLocaleString('en-US')} GPUs{o.region ? ` · ${o.region}` : ''} · {o.duration_months} mo
         </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold text-cyan">{usd(Number(o.expected_mrr))}<span className="text-xs font-normal text-grape-soft"> MRR</span></span>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
+          <span className="min-w-0 font-semibold text-cyan" title={usd(Number(o.expected_mrr))}>
+            {usdShort(Number(o.expected_mrr))}<span className="text-xs font-normal text-grape-soft"> MRR</span>
+          </span>
           <span className="text-xs text-grape-soft">{o.probability}%</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -287,7 +295,7 @@ export default function PipelineBoard({
                   <Badge tone={m.tone}>{m.n}. {m.label}</Badge>
                   <span className="text-[11px] text-grape-soft">{m.department}</span>
                   <span className="text-xs text-grape-soft">
-                    {cards.length} {cards.length === 1 ? 'deal' : 'deals'} · {usd(mrr)} MRR
+                    {cards.length} {cards.length === 1 ? 'deal' : 'deals'} · <span title={usd(mrr)}>{usdShort(mrr)}</span> MRR
                   </span>
                 </div>
                 {canWrite && (

@@ -19,7 +19,7 @@ for (const w of [1280, 1600, 2000]) {
         headers: auth,
         data: {
           customer_id: cust.id, gpu_model: 'HGX B300 Liquid-Cooled', quantity: 1024, duration_months: 36,
-          commercial_model: 'RESERVED_CLUSTER_PREPAID', expected_mrr: '98759424.55', probability: 65,
+          commercial_model: 'RESERVED_CLUSTER_PREPAID', expected_mrr: '1031464980.55', probability: 65,
           short_name: 'Positivo Manaus to Ascenty SP lot one', account_owner: 'Maurício de Carvalho Junior',
           region: 'Brazil (São Paulo - Ascenty SP5 campus)', assigned_to: 'Lizi Santucci de Albuquerque',
           next_action: 'Review MSA & Order Form with Legal and send to customer', expected_start: '2027-01-28',

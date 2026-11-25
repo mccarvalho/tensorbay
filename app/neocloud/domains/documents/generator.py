@@ -73,12 +73,13 @@ def build_document(
             return forms.fill_nda(template, ctx, notes), None
         if doc_type == "ESCROW_AGREEMENT":
             return forms.fill_escrow(template, ctx, notes), None
-        # MSA and Order Form share Schedule A; the only AI-written line is the per node spec.
+        # MSA and Order Form share Schedule A; the only AI-written line is the per node spec
+        # (temperature 0, so the MSA and the Order Form of one deal carry the same line).
         spec_line: str | None = None
         specs = _spec_names(base, opp["gpu_model"])
         if specs:
             try:
-                spec_line = svc.complete(prompts.SPEC_LINE_PROMPT, base.text(specs[0], 6000), max_tokens=400).strip().splitlines()[0]
+                spec_line = svc.complete(prompts.SPEC_LINE_PROMPT, base.text(specs[0], 6000), max_tokens=400, temperature=0).strip().splitlines()[0]
             except Exception as exc:  # noqa: BLE001 - the form is still usable with the blank
                 logger.warning("spec_line_failed", error=str(exc))
         fill = forms.fill_msa if doc_type == "MSA" else forms.fill_order_form

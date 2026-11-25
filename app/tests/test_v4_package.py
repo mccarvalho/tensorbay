@@ -28,7 +28,7 @@ CTX = {
     "opportunity": {
         "gpu_model": "B300", "gpus": 512, "nodes_or_racks": 64, "term_months": 36, "region": None,
         "first_delivery_date": "2027-01-30", "latest_delivery_date": "2027-06-30",
-        "implied_rate_usd_per_gpu_hour": "2.6755", "gpu_hours_per_month_basis": 730,
+        "implied_rate_usd_per_gpu_hour": "2.675514", "gpu_hours_per_month_basis": 730,
         "committed_value_usd": "36,000,000.00", "escrow_required": True, "payment_structure": "A",
         "upfront_pct": "30", "upfront_usd": "10,800,000.00", "balance_usd": "25,200,000.00",
     },

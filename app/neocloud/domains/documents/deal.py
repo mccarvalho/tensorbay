@@ -33,6 +33,21 @@ def money(value: Decimal | float | int, places: int = 2) -> str:
     return f"{Decimal(str(value)).quantize(q, rounding=ROUND_HALF_UP):,.{places}f}"
 
 
+def reconciled_rate(committed: Decimal, gpus: int, term_months: int) -> str:
+    """The GPU-hour rate with the fewest decimals (2 to 6) for which GPUs x hours x Rate
+    reproduces the Committed Value to within US$5, so the Order Form adds up on its face.
+    A negotiated rate such as 5.06 comes out exact; a rate derived from an MRR may need 6."""
+    hours = GPU_HOURS_PER_MONTH * term_months
+    if not gpus or not hours:
+        return "0.00"
+    exact = committed / (gpus * hours)
+    for places in range(2, 7):
+        r = exact.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
+        if abs(r * gpus * hours - committed) <= 5:
+            return f"{r:.{places}f}"
+    return f"{exact.quantize(Decimal(1).scaleb(-6), rounding=ROUND_HALF_UP):.6f}"
+
+
 def gpus_per_unit(gpu_model: str) -> int:
     """GPUs in one node (8) or one NVL72 rack (72)."""
     m = gpu_model.upper().replace(" ", "")
@@ -88,7 +103,7 @@ def build_context(opp: Opportunity, customer: Customer, contacts: list[Contact],
             "nodes_or_racks": -(-qty // per_unit), "gpus_per_node_or_rack": per_unit,
             "term_months": term, "commercial_model": opp.commercial_model, "region": opp.region,
             "expected_start": opp.expected_start.isoformat() if opp.expected_start else None,
-            "expected_mrr_usd": money(mrr), "implied_rate_usd_per_gpu_hour": money(rate, 4),
+            "expected_mrr_usd": money(mrr), "implied_rate_usd_per_gpu_hour": reconciled_rate(committed, qty, term),
             "gpu_hours_per_month_basis": GPU_HOURS_PER_MONTH,
             "committed_value_usd": money(committed),
             "escrow_required": opp.escrow_required, "stage": str(opp.sales_stage),

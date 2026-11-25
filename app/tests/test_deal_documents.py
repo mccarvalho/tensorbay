@@ -183,7 +183,7 @@ async def test_proposal_is_generated_downloaded_and_filed_in_drive(client, env):
     assert "TensorBay" in system and "NeoCloud" not in system
     assert "MM/DD/YYYY" in system  # the date standard reaches the AI drafts
     assert "Foxgaroo Ltda" in user and "Escrow agent: JPMorgan" in user and "text of TensorBay_Spec_NVIDIA_HGX_B300" in user
-    assert '"gpus": 512' in user and '"implied_rate_usd_per_gpu_hour": "2.6755"' in user
+    assert '"gpus": 512' in user and '"implied_rate_usd_per_gpu_hour": "2.675514"' in user
     # DOCX: stored in S3 and downloadable.
     r = await client.get(f"{V1}/documents/{doc['id']}/download")
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/vnd.openxmlformats")
@@ -218,7 +218,7 @@ async def test_msa_fills_the_standard_form_instead_of_rewriting_it(client, env):
     assert "8 GPUs, 288 GB HBM3e each" in text
     assert "Region (if agreed): Brazil (São Paulo)" in text
     assert "First target: 01/30/2027. Latest original target (all capacity): 06/30/2027." in text
-    assert "36 months for each accepted" in text and "US$ 2.6755 per GPU-hour" in text
+    assert "36 months for each accepted" in text and "US$ 2.675514 per GPU-hour" in text
     assert "US$ 36,000,000.00 (512 GPUs × 26,280 hours × Rate)" in text
     # V4: negotiated advance, structure, route and the balance.
     assert "Agreed advance: 30% of Committed Value = US$ 10,800,000.00" in text
@@ -350,3 +350,31 @@ def test_replace_spanning_runs_keeps_the_first_runs_format():
     p.add_run("TOMER]")
     assert render.replace_in_paragraph(p, "[CUSTOMER]", "ACME")
     assert p.text == "Dear ACME" and p.runs[1].bold and p.runs[1].text == "ACME"
+
+
+def test_rate_reconciles_with_the_committed_value_on_the_order_form_face():
+    from decimal import Decimal
+
+    from neocloud.domains.documents.deal import reconciled_rate
+
+    # A negotiated rate comes out exact, with the fewest decimals.
+    assert reconciled_rate(Decimal("265953600"), 2000, 36) == "5.06"
+    assert reconciled_rate(Decimal("2242560"), 40, 12) == "6.40"
+    # A rate derived from a round MRR needs more decimals so GPUs x hours x Rate still adds up.
+    r = Decimal(reconciled_rate(Decimal("36000000"), 512, 36))
+    assert abs(r * 512 * 730 * 36 - Decimal("36000000")) <= 5 and r == Decimal("2.675514")
+    assert reconciled_rate(Decimal("0"), 0, 12) == "0.00"
+
+
+async def test_spec_line_is_requested_at_temperature_zero(client, env, monkeypatch):
+    seen = []
+    orig = BedrockDocumentService._converse
+
+    def spy(self, **kw):
+        seen.append(kw["inferenceConfig"])
+        return orig(self, **kw)
+
+    monkeypatch.setattr(BedrockDocumentService, "_converse", spy)
+    opp = await _deal(client)
+    await _generate(client, opp, doc_type="MSA")
+    assert seen and seen[0].get("temperature") == 0  # same line in the MSA and the Order Form of a deal

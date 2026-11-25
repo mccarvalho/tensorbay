@@ -54,7 +54,7 @@ class BedrockDocumentService:
     def _put_object(self, **kwargs) -> dict[str, Any]:
         return self._s3_client().put_object(**kwargs)
 
-    def complete(self, system: str, user: str, max_tokens: int = 4000) -> str:
+    def complete(self, system: str, user: str, max_tokens: int = 4000, temperature: float | None = None) -> str:
         """One Converse call with a system prompt; returns the text."""
         kwargs: dict[str, Any] = {
             "modelId": self.settings.bedrock_model_id,
@@ -62,6 +62,8 @@ class BedrockDocumentService:
             "messages": [{"role": "user", "content": [{"text": user}]}],
             "inferenceConfig": {"maxTokens": max_tokens},
         }
+        if temperature is not None:
+            kwargs["inferenceConfig"]["temperature"] = temperature
         if self.settings.bedrock_guardrail_id:
             kwargs["guardrailConfig"] = {
                 "guardrailIdentifier": self.settings.bedrock_guardrail_id,

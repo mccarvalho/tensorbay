@@ -178,7 +178,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
       role="presentation"
     >
       <div
-        className={`card-glow flex max-h-[calc(100vh-2rem)] w-full flex-col ${size === 'wide' ? 'max-w-5xl' : 'max-w-lg'}`}
+        className={`card-glow !bg-space-600 flex max-h-[calc(100vh-2rem)] w-full flex-col ${size === 'wide' ? 'max-w-5xl' : 'max-w-lg'}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

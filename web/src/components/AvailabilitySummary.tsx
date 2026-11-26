@@ -45,7 +45,7 @@ export default function AvailabilitySummary() {
         sites: [...new Set(rows.map((o) => o.site))].join(', '),
       })),
       months: sortKeys(monthsBy).map((k) => ({ key: k, ...monthsBy.get(k)! })),
-      groups: sortKeys(groupsBy).map((k) => ({ key: k, rows: groupsBy.get(k)! })),
+      groups: [...groupsBy.keys()].sort((a, b) => (a === 'now' ? -1 : b === 'now' ? 1 : a.localeCompare(b))).map((k) => ({ key: k, rows: groupsBy.get(k)! })),
     };
   }, [offers]);
 

@@ -25,6 +25,8 @@ test('availability summary and modal on the sales pipeline', async ({ page }) =>
   await expect(modal).toContainText('March 2027');
   await expect(modal).toContainText('VR200');
   await expect(modal).toContainText('16 racks');
+  await expect(modal.locator('span.badge').first()).toHaveText('Immediate');  // immediate comes first
+  await page.waitForTimeout(600);
   await page.screenshot({ path: '/tmp/avail_modal.png' });
   await page.getByRole('button', { name: 'Close', exact: true }).last().click();
   await expect(modal).toBeHidden();

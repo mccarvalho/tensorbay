@@ -18,6 +18,8 @@ SYSTEM_PROMPT = (
     "record for the customer's legal details and contacts, and use the workload to tailor the text.\n"
     "- Write every date as MM/DD/YYYY (for example 06/30/2027). Dates in DEAL DATA are ISO (YYYY-MM-DD): "
     "convert them.\n"
+    "- Put in **bold** every value taken from the DEAL DATA or the customer_intake (customer names, "
+    "quantities, GPU models, prices, totals, dates, references, contacts). Do not bold the rest.\n"
     "- Never include passport, EIN or LLC formation details.\n"
     "- The party is called \"TensorBay\", never any other platform name.\n"
     "- Output Markdown only: # title, ## sections, bullet lists, numbered clauses, and pipe tables for "

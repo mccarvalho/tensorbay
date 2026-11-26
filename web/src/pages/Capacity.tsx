@@ -19,6 +19,7 @@ import {
   type Column,
 } from '../components/ui';
 import { SupplyForecast, SupplyOrdersSection } from './SupplyOrders';
+import AvailabilityList from '../components/AvailabilityList';
 import DateInput from '../components/DateInput';
 
 interface Ledger {
@@ -227,6 +228,8 @@ export default function Capacity() {
           </div>
         ) : null}
       </section>
+
+      <AvailabilityList />
 
       {/* Supply orders: purchases recorded by totals, with delivery lots */}
       <SupplyOrdersSection />

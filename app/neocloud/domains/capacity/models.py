@@ -104,3 +104,25 @@ class SupplyOrder(Base, UUIDMixin, AuditMixin):
     tax_regime: Mapped[str | None] = mapped_column(String(255), nullable=True)
     delivery_window: Mapped[str | None] = mapped_column(String(128), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AvailabilityOffer(Base, UUIDMixin, AuditMixin):
+    """What TensorBay can offer a customer: a GPU model at a site, now or from a given month.
+
+    This is the sales-facing list ("Immediate availability", "January", "February"...). It does not
+    feed the capacity ledger: the ledger counts assets and procurement, this list is what sales may quote.
+    ``available_from`` is the first day of the month the capacity can be delivered; null = immediate.
+    """
+
+    __tablename__ = "capacity_availability"
+
+    gpu_model: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    cooling: Mapped[str | None] = mapped_column(String(8), nullable=True)  # AIR | LIQUID
+    quantity_unit: Mapped[str] = mapped_column(String(8), nullable=False, default="GPUS")  # GPUS | RACKS
+    site: Mapped[str] = mapped_column(String(255), nullable=False)
+    available_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    total_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    available_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_per_gpu_hour: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -99,12 +99,16 @@ def _fill_schedule_a(doc, ctx: dict[str, Any], per_node_spec: str | None, notes:
     party = _party(ctx)
     ref = _of_ref(ctx)
 
-    def put(label: str, fn) -> None:  # noqa: ANN001
+    def put(label: str, fn, whole: bool = False) -> None:  # noqa: ANN001
+        """Fill a row. What was filled in is set in bold; ``whole``: the new text replaces the old one entirely."""
         row = render.row_by_label(t, label)
         if row is not None:
             new = fn(row.cells[1].text)
             if new is not None and new != row.cells[1].text:
-                render.set_cell_text(row.cells[1], new)
+                if whole:
+                    render.set_cell_text(row.cells[1], new, bold=True)
+                else:
+                    render.set_cell_text(row.cells[1], new, old=row.cells[1].text)
 
     legal = party["name"] or ""
     if party["form"] and party["jurisdiction"]:
@@ -116,7 +120,7 @@ def _fill_schedule_a(doc, ctx: dict[str, Any], per_node_spec: str | None, notes:
     if party["address"]:
         legal += f", registered address {party['address']}"
     missing = [x for x, k in (("company form", "form"), ("registration number", "reg"), ("registered address", "address")) if not party[k]]
-    put("Customer", lambda _t: legal + (f" [{', '.join(missing)} to be completed]" if missing else ""))
+    put("Customer", lambda _t: legal + (f" [{', '.join(missing)} to be completed]" if missing else ""), whole=True)
 
     spec = gpu_specs.lookup(opp["gpu_model"])  # TensorBay spec sheet of the platform, if there is one
     label = spec.form_label if spec else _platform_label(opp["gpu_model"])
@@ -135,7 +139,7 @@ def _fill_schedule_a(doc, ctx: dict[str, Any], per_node_spec: str | None, notes:
     # A line typed on the opportunity wins; otherwise the spec sheet; the model-written line is the last resort.
     line = per_node_spec or (spec.per_unit_line() if spec else None)
     if line:
-        put("Per node or rack", lambda _x: line)
+        put("Per node or rack", lambda _x: line, whole=True)
     fabric_key = it.get("compute_fabric") or (spec.fabric if spec else "")
     fabric = {"INFINIBAND": "NVIDIA Quantum InfiniBand (NDR)", "ROCE": "RoCE v2 Ethernet"}.get(fabric_key)
     if fabric:
@@ -209,9 +213,9 @@ def _fill_schedule_a(doc, ctx: dict[str, Any], per_node_spec: str | None, notes:
     bill = _person(it.get("billing_contact_name"), it.get("billing_contact_email"), it.get("billing_contact_phone")) \
         or _contact_line(ctx["contacts"], "BILLING", "FINANCE")
     if tech:
-        put("Customer technical contacts", lambda _x: tech)
+        put("Customer technical contacts", lambda _x: tech, whole=True)
     if bill:
-        put("Customer billing contact", lambda _x: bill)
+        put("Customer billing contact", lambda _x: bill, whole=True)
 
     special = []
     if notes:
@@ -241,7 +245,7 @@ def _fill_tranche_table(doc, ctx: dict[str, Any]) -> None:  # noqa: ANN001
     for row, values in ((table.rows[1], first), (table.rows[-1], total)):
         for cell, value in zip(row.cells, values, strict=False):
             if value:
-                render.set_cell_text(cell, value)
+                render.set_cell_text(cell, value, bold=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -365,10 +369,10 @@ def fill_nda(template: bytes, ctx: dict[str, Any], notes: str | None) -> bytes:
     if parties is not None:
         row = render.row_by_label(parties, "Party B")
         if row is not None:
-            render.set_cell_text(row.cells[1], cust["legal_name"] + (f", {cust['country_name']}" if cust.get("country_name") else ""))
+            render.set_cell_text(row.cells[1], cust["legal_name"] + (f", {cust['country_name']}" if cust.get("country_name") else ""), bold=True)
             if it.get("registered_address"):
-                render.set_cell_text(row.cells[2], _one_line(it["registered_address"]))
+                render.set_cell_text(row.cells[2], _one_line(it["registered_address"]), bold=True)
             contact = _person(it.get("signatory_name"), it.get("notices_email")) or _contact_line(ctx["contacts"], "EXECUTIVE", "COMMERCIAL")
             if contact:
-                render.set_cell_text(row.cells[3], contact)
+                render.set_cell_text(row.cells[3], contact, bold=True)
     return render.docx_bytes(doc)

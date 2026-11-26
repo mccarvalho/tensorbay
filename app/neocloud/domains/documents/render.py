@@ -1,10 +1,13 @@
 """DOCX output: a branded renderer for AI-written Markdown, and helpers that fill
 the placeholders of TensorBay's standard forms without touching their formatting."""
 
+import copy
+import difflib
 import io
 import re
 
 import docx
+import docx.text.run
 from docx.document import Document as DocxDocument
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -145,10 +148,33 @@ def markdown_to_docx(markdown: str, title: str) -> bytes:
 # --------------------------------------------------------------------------- #
 # Filling a standard form
 # --------------------------------------------------------------------------- #
-def replace_in_paragraph(par: Paragraph, old: str, new: str) -> bool:
+def _bold_slice(run, a: int, b: int) -> None:
+    """Make characters [a, b) of a run bold by splitting it into up to three runs (same formatting otherwise)."""
+    text = run.text
+    if a >= b or a < 0 or b > len(text):
+        return
+    pieces = [(text[:a], False), (text[a:b], True), (text[b:], False)]
+    pieces = [p for p in pieces if p[0]]
+    base = copy.deepcopy(run._r)
+    anchor = run._r
+    for i, (chunk, bold) in enumerate(pieces):
+        if i == 0:
+            target = run
+        else:
+            el = copy.deepcopy(base)
+            anchor.addnext(el)
+            anchor = el
+            target = docx.text.run.Run(el, run._parent)
+        target.text = chunk
+        if bold:
+            target.bold = True
+
+
+def replace_in_paragraph(par: Paragraph, old: str, new: str, *, bold: bool = True) -> bool:
     """Replace ``old`` with ``new`` keeping the formatting of the run where it starts.
 
-    Works when ``old`` spans several runs. Returns True if anything changed.
+    Works when ``old`` spans several runs. The words of ``new`` that are not in ``old`` are set in bold: it is the data TensorBay filled into the form.
+    Returns True if anything changed.
     """
     runs = par.runs
     full = "".join(r.text for r in runs)
@@ -158,15 +184,51 @@ def replace_in_paragraph(par: Paragraph, old: str, new: str) -> bool:
     end = start + len(old)
     pos = 0
     first = True
+    first_run = None
+    first_at = 0
     for r in runs:
         r_start, r_end = pos, pos + len(r.text)
         pos = r_end
         if r_end <= start or r_start >= end:
             continue
         a, b = max(start, r_start) - r_start, min(end, r_end) - r_start
+        if first:
+            first_run, first_at = r, a
         r.text = r.text[:a] + (new if first else "") + r.text[b:]
         first = False
+    if bold and first_run is not None and new:
+        spans, at = [], first_at
+        for chunk, is_new in diff_segments(old, new):
+            if is_new:
+                spans.append((at, at + len(chunk)))
+            at += len(chunk)
+        for a, b in reversed(spans):  # last first: earlier offsets stay valid after a split
+            _bold_slice(first_run, a, b)
     return True
+
+
+def _tokens(text: str) -> list[str]:
+    return [t for t in re.findall(r"\s+|\S+?(?=[.,;:)]*(?:\s|$))|[.,;:)]+", text) if t]
+
+
+def diff_segments(old: str, new: str) -> list[tuple[str, bool]]:
+    """Split ``new`` into (text, is_new) parts: is_new marks what differs from ``old`` (word level)."""
+    a, b = _tokens(old), _tokens(new)
+    segs: list[list] = []
+    for op, _i1, _i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        chunk = "".join(b[j1:j2])
+        if chunk:
+            segs.append([chunk, op in ("replace", "insert")])
+    for i in range(1, len(segs) - 1):  # a space between two filled values belongs to them
+        if not segs[i][1] and not segs[i][0].strip() and segs[i - 1][1] and segs[i + 1][1]:
+            segs[i][1] = True
+    merged: list[list] = []
+    for text, flag in segs:
+        if merged and merged[-1][1] == flag:
+            merged[-1][0] += text
+        else:
+            merged.append([text, flag])
+    return [(t, f) for t, f in merged]
 
 
 def _all_paragraphs(doc: DocxDocument):
@@ -196,17 +258,40 @@ def replace_everywhere(doc: DocxDocument, pairs: list[tuple[str, str]]) -> int:
     return hits
 
 
-def set_cell_text(cell, text: str) -> None:
-    """Replace a table cell's text, keeping the first run's formatting."""
+def set_cell_text(cell, text: str, *, bold: bool = False, old: str | None = None) -> None:
+    """Replace a table cell's text, keeping the first run's formatting.
+
+    ``bold`` sets the whole new text in bold; ``old`` (the previous text) sets in bold only what changed.
+    """
     par = cell.paragraphs[0]
     if par.runs:
+        base = copy.deepcopy(par.runs[0]._r)
         par.runs[0].text = text
         for r in par.runs[1:]:
             r.text = ""
     else:
         par.add_run(text)
+        base = None
     for extra in cell.paragraphs[1:]:
         extra._element.getparent().remove(extra._element)
+    if not (bold or old is not None) or not text:
+        return
+    segs = [(text, True)] if old is None else diff_segments(old, text)
+    if not any(flag for _t, flag in segs):
+        return
+    first = par.runs[0]
+    anchor = first._r
+    for i, (chunk, flag) in enumerate(segs):
+        if i == 0:
+            target = first
+        else:
+            el = copy.deepcopy(base if base is not None else first._r)
+            anchor.addnext(el)
+            anchor = el
+            target = docx.text.run.Run(el, first._parent)
+        target.text = chunk
+        if flag:
+            target.bold = True
 
 
 def table_by_header(doc: DocxDocument, first_header: str, second_header: str) -> object | None:

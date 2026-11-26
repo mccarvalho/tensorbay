@@ -428,3 +428,23 @@ async def test_a100_is_ticked_as_other_and_a_typed_node_spec_still_wins(client, 
     _, of = await _generate(client, opp, doc_type="ORDER_FORM")
     text = _text((await client.get(f"{V1}/documents/{of['id']}/download")).content)
     assert "☒ Other: NVIDIA HGX A100 (SXM 80 GB)" in text and "Custom node line" in text
+
+
+def _bold_text(data: bytes) -> str:
+    d = docx.Document(io.BytesIO(data))
+    pars = list(d.paragraphs)
+    for t in d.tables:
+        for row in t.rows:
+            for c in row.cells:
+                pars += c.paragraphs
+    return "|".join(r.text for p in pars for r in p.runs if r.bold and r.text.strip())
+
+
+async def test_everything_filled_from_the_crm_is_bold_and_the_form_wording_is_not(client, env):
+    opp = await _deal(client)
+    _, msa = await _generate(client, opp, doc_type="MSA")
+    bold = _bold_text((await client.get(f"{V1}/documents/{msa['id']}/download")).content)
+    for filled in ("FOXGAROO LTDA", "Foxgaroo Ltda", "36,000,000.00", "512", "01/30/2027", "06/30/2027", "30%", "TB-OF-POSITIVO-"):
+        assert filled in bold, filled
+    for form_wording in ("Specification", "Mandatory upfront route", "Shared high-performance storage", "Only amendments"):
+        assert form_wording not in bold, form_wording

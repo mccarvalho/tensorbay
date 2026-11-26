@@ -450,11 +450,11 @@ export default function OpportunityFormModal({
           </label>
 
           <div>
-            <label className="label" htmlFor="opp_node_spec">Node specification (Order Form)</label>
+            <label className="label" htmlFor="opp_node_spec">Node specification override (Order Form)</label>
             <textarea id="opp_node_spec" className="input" rows={2} maxLength={500}
-              placeholder="Blank: written from the GPU spec sheet with the first document, then reused"
+              placeholder="Leave blank: filled automatically from the TensorBay GPU spec sheet"
               value={form.node_spec} onChange={(e) => setForm({ ...form, node_spec: e.target.value })} />
-            <p className="mt-1 text-xs text-grape-soft">One line, the same in every document of this deal. Edit it to override.</p>
+            <p className="mt-1 text-xs text-grape-soft">Only type here to replace the spec sheet line in every document of this deal.</p>
           </div>
 
           <span className="eyebrow mt-2">DELIVERY &amp; PAYMENT (ORDER FORM)</span>

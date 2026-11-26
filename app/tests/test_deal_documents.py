@@ -99,7 +99,7 @@ class FakeKb:
         return _escrow_template() if name == "ESCROW" else _msa_template()
 
     def text_names(self):
-        return ["TensorBay_Spec_NVIDIA_HGX_B300_Air-Cooled", "TensorBay_Proposal_Goodfire_B300", "TensorBay_MSA_Standard_Form"]
+        return ["TensorBay_Spec_NVIDIA_HGX_B300_Air-Cooled", "TensorBay_Spec_NVIDIA_GB300_NVL72", "TensorBay_Proposal_Goodfire_B300", "TensorBay_MSA_Standard_Form"]
 
     def text(self, name, limit=None):
         return f"text of {name}"
@@ -141,14 +141,14 @@ def env(monkeypatch):
     return SimpleNamespace(store=store, prompts=prompts, drive=drive, state=state)
 
 
-async def _deal(client: AsyncClient, short: str | None = "Positivo B300", escrow: bool = True) -> dict:
+async def _deal(client: AsyncClient, short: str | None = "Positivo B300", escrow: bool = True, gpu: str = "B300") -> dict:
     cust = (await client.post(f"{V1}/customers", json={
         "legal_name": "Foxgaroo Ltda", "status": "PROSPECT", "country": "BR", "tax_id": "12.345.678/0001-90",
     })).json()
     await client.post(f"{V1}/customers/{cust['id']}/contacts", json={
         "type": "EXECUTIVE", "name": "Ana Souza", "role": "CEO", "email": "ana@foxgaroo.com"})
     opp = (await client.post(f"{V1}/sales/opportunities", json={
-        "customer_id": cust["id"], "gpu_model": "B300", "quantity": 512, "duration_months": 36,
+        "customer_id": cust["id"], "gpu_model": gpu, "quantity": 512, "duration_months": 36,
         "commercial_model": "GPU_MONTHLY", "expected_mrr": "1000000", "probability": 50, "short_name": short,
         "escrow_required": escrow, "expected_start": "2027-01-28", "region": "Brazil (São Paulo)",
         "first_delivery_date": "2027-01-30", "latest_delivery_date": "2027-06-30", "upfront_pct": "30", "payment_structure": "A",
@@ -207,15 +207,15 @@ async def test_msa_fills_the_standard_form_instead_of_rewriting_it(client, env):
     opp = await _deal(client)
     _, doc = await _generate(client, opp, doc_type="MSA", notes="Net 30 on the balance")
     assert doc["status"] == "GENERATED", doc
-    assert len(env.prompts) == 1 and "ONE line" in env.prompts[0][0]  # AI only wrote the per-node spec line
+    assert env.prompts == []  # B300 has a spec sheet in gpu_specs.py: no model call
     data = (await client.get(f"{V1}/documents/{doc['id']}/download")).content
     text = _text(data)
     assert "FOXGAROO LTDA" in text and "[Custo" not in text and "[Customer legal name]" not in text
     assert "registration number 12.345.678/0001-90" in text
     assert "TB-MSA-POSITIVO-" in text and "Order Form No. TB-OF-POSITIVO-" in text
     assert "☒ NVIDIA HGX B300 (air-cooled)" in text and "☐ NVIDIA HGX B200" in text
-    assert "64 nodes / racks · 512 GPUs · ______ CPUs" in text
-    assert "8 GPUs, 288 GB HBM3e each" in text
+    assert "64 nodes / racks · 512 GPUs · 128 CPUs" in text
+    assert "8 GPUs per node, approx. 288 GB HBM3e per GPU (2.3 TB per node)" in text
     assert "Region (if agreed): Brazil (São Paulo)" in text
     assert "First target: 01/30/2027. Latest original target (all capacity): 06/30/2027." in text
     assert "36 months for each accepted" in text and "US$ 2.675514 per GPU-hour" in text
@@ -261,7 +261,7 @@ async def test_order_form_and_escrow_agreement_are_filled_forms(client, env):
     assert "Agreed Upfront Payment (USD): 10,800,000.00" in e_text and "latest target: 06/30/2027" in e_text
     assert "Customer: Ana Souza" in e_text
     # Only the Order Form's per-node spec line used the model; the escrow agreement used none.
-    assert len(env.prompts) == 1 and "ONE line" in env.prompts[0][0]
+    assert env.prompts == []  # B300 comes from gpu_specs.py
     assert len(env.drive.uploads) == 2 and env.drive.path_of(env.drive.uploads[1][0]).endswith("/Escrow Agreement")
 
 
@@ -375,13 +375,13 @@ async def test_spec_line_is_requested_at_temperature_zero(client, env, monkeypat
         return orig(self, **kw)
 
     monkeypatch.setattr(BedrockDocumentService, "_converse", spy)
-    opp = await _deal(client)
+    opp = await _deal(client, gpu="GB300")
     await _generate(client, opp, doc_type="MSA")
     assert seen and seen[0].get("temperature") == 0  # same line in the MSA and the Order Form of a deal
 
 
 async def test_node_spec_is_written_once_and_every_document_of_the_deal_reuses_it(client, env):
-    opp = await _deal(client)
+    opp = await _deal(client, gpu="GB300")
     env.prompts.clear()
     _, msa = await _generate(client, opp, doc_type="MSA")
     assert len(env.prompts) == 1  # the model wrote the line once
@@ -396,3 +396,35 @@ async def test_node_spec_is_written_once_and_every_document_of_the_deal_reuses_i
     _, msa2 = await _generate(client, opp, doc_type="MSA")
     assert len(env.prompts) == 1
     assert "8x B300 SXM, 288 GB each, 2x Xeon 6, 4 TB DDR5" in _text((await client.get(f"{V1}/documents/{msa2['id']}/download")).content)
+
+
+async def test_platform_with_a_spec_sheet_is_filled_without_the_model(client, env):
+    opp = await _deal(client, gpu="GB200")  # 512 GPUs -> 8 racks (the fake form has no GB200 box)
+    env.prompts.clear()
+    _, of = await _generate(client, opp, doc_type="ORDER_FORM")
+    assert env.prompts == []  # no model call: the numbers come from gpu_specs.py
+    text = _text((await client.get(f"{V1}/documents/{of['id']}/download")).content)
+    assert "☒ Other: NVIDIA GB200 NVL72" not in text  # a box would be ticked; the fake form has none
+    assert "8 racks" in text and "288 CPUs" in text
+    assert "72 GPUs per rack, approx. 186 GB HBM3e per GPU (13.4 TB per rack), 36 NVIDIA Grace CPUs" in text
+    assert "2,592 cores" in text and "17 TB LPDDR5X" in text
+    assert "☒ NVIDIA Quantum InfiniBand (NDR)" in text and "approx. 400 Gb/s per GPU" in text
+    assert "______ CPUs" not in text
+
+
+async def test_hgx_platform_fills_cpus_fabric_and_storage_from_the_sheet(client, env):
+    opp = await _deal(client, gpu="B200")  # 512 GPUs -> 64 nodes
+    _, of = await _generate(client, opp, doc_type="ORDER_FORM")
+    text = _text((await client.get(f"{V1}/documents/{of['id']}/download")).content)
+    assert "64 nodes / racks" in text and "128 CPUs" in text
+    assert "☒ RoCE v2 Ethernet" in text and "approx. 400 Gb/s per GPU" in text
+    assert "local NVMe per node (approx. 28 TB)" in text
+    assert "180 GB HBM3e per GPU" in text
+
+
+async def test_a100_is_ticked_as_other_and_a_typed_node_spec_still_wins(client, env):
+    opp = await _deal(client, gpu="A100")
+    await client.patch(f"{V1}/sales/opportunities/{opp['id']}", json={"node_spec": "Custom node line"})
+    _, of = await _generate(client, opp, doc_type="ORDER_FORM")
+    text = _text((await client.get(f"{V1}/documents/{of['id']}/download")).content)
+    assert "☒ Other: NVIDIA HGX A100 (SXM 80 GB)" in text and "Custom node line" in text

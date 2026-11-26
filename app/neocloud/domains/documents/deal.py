@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from neocloud.domains.customers.models import Contact, Customer
+from neocloud.domains.documents import gpu_specs
 from neocloud.domains.sales.models import Opportunity, Quote
 
 GPU_HOURS_PER_MONTH = 730  # TensorBay billing basis
@@ -50,6 +51,9 @@ def reconciled_rate(committed: Decimal, gpus: int, term_months: int) -> str:
 
 def gpus_per_unit(gpu_model: str) -> int:
     """GPUs in one node (8) or one NVL72 rack (72)."""
+    spec = gpu_specs.lookup(gpu_model)
+    if spec:
+        return spec.gpus_per_unit
     m = gpu_model.upper().replace(" ", "")
     return 72 if "NVL72" in m or m.startswith(("GB200", "GB300")) else 8
 

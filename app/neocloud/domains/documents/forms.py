@@ -14,7 +14,7 @@ from typing import Any
 
 import docx
 
-from neocloud.domains.documents import render
+from neocloud.domains.documents import gpu_specs, render
 
 PAYMENT_STRUCTURE = {
     "A": "A. Monthly installments",
@@ -118,17 +118,42 @@ def _fill_schedule_a(doc, ctx: dict[str, Any], per_node_spec: str | None, notes:
     missing = [x for x, k in (("company form", "form"), ("registration number", "reg"), ("registered address", "address")) if not party[k]]
     put("Customer", lambda _t: legal + (f" [{', '.join(missing)} to be completed]" if missing else ""))
 
-    label = _platform_label(opp["gpu_model"])
-    put("Platform", lambda x: _tick(x, label) if label else x.replace("☐ Other: __________", f"☒ Other: {opp['gpu_model']}"))
-    put("Quantity", lambda x: x.replace("______ nodes / racks", f"{opp['nodes_or_racks']} nodes / racks", 1)
-        .replace("______ GPUs", f"{opp['gpus']} GPUs", 1))
-    if per_node_spec:
-        put("Per node or rack", lambda _x: per_node_spec)
-    fabric = {"INFINIBAND": "NVIDIA Quantum InfiniBand (NDR)", "ROCE": "RoCE v2 Ethernet"}.get(it.get("compute_fabric") or "")
+    spec = gpu_specs.lookup(opp["gpu_model"])  # TensorBay spec sheet of the platform, if there is one
+    label = spec.form_label if spec else _platform_label(opp["gpu_model"])
+    other = spec.name if spec else opp["gpu_model"]
+    put("Platform", lambda x: _tick(x, label) if label else x.replace("☐ Other: __________", f"☒ Other: {other}"))
+
+    def quantity(x: str) -> str:
+        x = x.replace("______ nodes / racks", f"{opp['nodes_or_racks']} {spec.unit + 's' if spec else 'nodes / racks'}", 1) \
+            if spec and spec.unit == "rack" else x.replace("______ nodes / racks", f"{opp['nodes_or_racks']} nodes / racks", 1)
+        x = x.replace("______ GPUs", f"{opp['gpus']} GPUs", 1)
+        if spec:
+            x = x.replace("______ CPUs", f"{opp['nodes_or_racks'] * spec.cpus_per_unit:,} CPUs", 1)
+        return x
+
+    put("Quantity", quantity)
+    # A line typed on the opportunity wins; otherwise the spec sheet; the model-written line is the last resort.
+    line = per_node_spec or (spec.per_unit_line() if spec else None)
+    if line:
+        put("Per node or rack", lambda _x: line)
+    fabric_key = it.get("compute_fabric") or (spec.fabric if spec else "")
+    fabric = {"INFINIBAND": "NVIDIA Quantum InfiniBand (NDR)", "ROCE": "RoCE v2 Ethernet"}.get(fabric_key)
     if fabric:
-        put("Compute fabric", lambda x: _tick(x, fabric))
-    if it.get("shared_storage_tb") is not None:
-        put("Storage", lambda x: x.replace("approx. ______ TB usable", f"approx. {it['shared_storage_tb']:,} TB usable", 1))
+        def fabric_fn(x: str) -> str:
+            x = _tick(x, fabric)
+            if spec and fabric_key == spec.fabric:
+                x = x.replace("approx. ______ Gb/s per GPU", f"approx. {spec.fabric_rate}", 1)
+            return x
+        put("Compute fabric", fabric_fn)
+
+    def storage(x: str) -> str:
+        if it.get("shared_storage_tb") is not None:
+            x = x.replace("approx. ______ TB usable", f"approx. {it['shared_storage_tb']:,} TB usable", 1)
+        if spec and spec.local_nvme_tb:
+            x = x.replace("local NVMe per node", f"local NVMe per node (approx. {spec.local_nvme_tb} TB)", 1)
+        return x
+
+    put("Storage", storage)
 
     def connectivity(x: str) -> str:
         if it.get("dedicated_internet_gbps") is not None:

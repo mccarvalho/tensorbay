@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from neocloud.core.config import Settings, get_settings
 from neocloud.core.logging import get_logger
 from neocloud.db.session import get_sessionmaker
-from neocloud.domains.documents import deal, forms, kb, prompts, render
+from neocloud.domains.documents import deal, forms, gpu_specs, kb, prompts, render
 from neocloud.domains.documents.models import DocType, DocumentStatus, GeneratedDocument
 from neocloud.domains.documents.service import BedrockDocumentService
 from neocloud.domains.drive import service as drive_service
@@ -77,7 +77,8 @@ def build_document(
         # (temperature 0, so the MSA and the Order Form of one deal carry the same line).
         spec_line: str | None = (opp.get("node_spec") or "").strip() or None  # already settled for this deal
         new_spec: str | None = None
-        specs = _spec_names(base, opp["gpu_model"]) if not spec_line else []
+        # a platform with a TensorBay spec sheet is filled from gpu_specs.py, without a model call
+        specs = _spec_names(base, opp["gpu_model"]) if not spec_line and gpu_specs.lookup(opp["gpu_model"]) is None else []
         if specs:
             try:
                 spec_line = svc.complete(prompts.SPEC_LINE_PROMPT, base.text(specs[0], 6000), max_tokens=400, temperature=0).strip().splitlines()[0]

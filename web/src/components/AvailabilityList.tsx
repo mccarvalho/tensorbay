@@ -8,20 +8,28 @@ import { GPU_MODELS } from '../constants';
 import { useToast, errMessage } from './toast';
 import { DataTable, EmptyState, ErrorState, Modal, Spinner, type Column } from './ui';
 
-interface Offer {
+export interface Offer {
   id: string; gpu_model: string; cooling: 'AIR' | 'LIQUID' | null; quantity_unit: 'GPUS' | 'RACKS'; site: string;
   available_from: string | null; total_qty: number | null; available_qty: number;
   price_per_gpu_hour: string | null; currency: string; notes: string | null;
 }
 
-const n = (v: number) => v.toLocaleString('en-US');
-const unit = (o: Offer) => (o.quantity_unit === 'RACKS' ? 'racks' : 'GPUs');
-const when = (d: string | null) => {
+export const n = (v: number) => v.toLocaleString('en-US');
+export const unit = (o: Offer) => (o.quantity_unit === 'RACKS' ? 'racks' : 'GPUs');
+export const when = (d: string | null) => {
   if (!d) return 'Immediate';
   const [y, m] = d.split('-');
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 };
-const model = (o: Offer) => o.gpu_model + (o.cooling === 'AIR' ? ' · Air' : o.cooling === 'LIQUID' ? ' · Liquid' : '');
+export const model = (o: Offer) => o.gpu_model + (o.cooling === 'AIR' ? ' · Air' : o.cooling === 'LIQUID' ? ' · Liquid' : '');
+
+export async function copyAvailabilityText(toast: ReturnType<typeof useToast>) {
+  try {
+    const r = await api.get<{ text: string }>('/v1/capacity/availability/text');
+    await navigator.clipboard.writeText(r.text);
+    toast.success('List copied');
+  } catch (e) { toast.error(errMessage(e, 'Could not copy the list')); }
+}
 
 export default function AvailabilityList() {
   const qc = useQueryClient();
@@ -35,13 +43,7 @@ export default function AvailabilityList() {
     onSuccess: () => { refresh(); toast.success('Entry deleted'); },
     onError: (e) => toast.error(errMessage(e, 'Could not delete')),
   });
-  const copy = async () => {
-    try {
-      const r = await api.get<{ text: string }>('/v1/capacity/availability/text');
-      await navigator.clipboard.writeText(r.text);
-      toast.success('List copied');
-    } catch (e) { toast.error(errMessage(e, 'Could not copy the list')); }
-  };
+  const copy = () => copyAvailabilityText(toast);
 
   const cols: Array<Column<Offer>> = [
     { key: 'w', header: 'Available from', render: (o) => <span className={o.available_from ? '' : 'text-emerald-300'}>{when(o.available_from)}</span> },

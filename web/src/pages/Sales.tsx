@@ -7,6 +7,7 @@ import { api } from '../api';
 import { useToast, errMessage } from '../components/toast';
 import OpportunityFormModal, { type Opportunity } from '../components/OpportunityFormModal';
 import { hasPermission } from '../permissions';
+import AvailabilitySummary from '../components/AvailabilitySummary';
 import PipelineBoard, { type InventoryLane } from './PipelineBoard';
 import {
   ACTIVE_STAGES, ESCROW_STAGES, MACRO_STAGES, STAGE_LABEL, STAGE_TONE,
@@ -324,6 +325,8 @@ export default function Sales() {
         <KpiCard label="Active Contract MRR" value={moneyShort(kpis.wonMrr)} accent="white" />
         <KpiCard label="Pipeline GPU Demand" value={num(kpis.gpuDemand)} accent="flamingo" sub="open opps" />
       </div>
+
+      <AvailabilitySummary />
 
       {/* Stage filter: five macro stages, then On Hold and Lost */}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by stage">

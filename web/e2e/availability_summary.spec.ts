@@ -26,6 +26,15 @@ test('availability summary and modal on the sales pipeline', async ({ page }) =>
   await expect(modal).toContainText('VR200');
   await expect(modal).toContainText('16 racks');
   await expect(modal.locator('span.badge').first()).toHaveText('Immediate');  // immediate comes first
+  // The window must sit on top of the page header: its title is visible and not covered.
+  const top = await page.evaluate(() => {
+    const d = document.querySelector('[role="dialog"]') as HTMLElement;
+    const r = d.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + 40, r.top + 20);
+    return { top: r.top, inside: !!hit && d.contains(hit), parent: d.parentElement?.parentElement === document.body };
+  });
+  expect(top.parent).toBe(true);
+  expect(top.inside).toBe(true);
   await page.waitForTimeout(600);
   await page.screenshot({ path: '/tmp/avail_modal.png' });
   await page.getByRole('button', { name: 'Close', exact: true }).last().click();

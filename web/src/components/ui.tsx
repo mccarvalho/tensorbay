@@ -6,6 +6,7 @@ import {
   type ReactElement,
   useEffect,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { ApiError } from '../api';
 
 // ---------------------------------------------------------------------------
@@ -169,7 +170,9 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
 
   if (!open) return null;
 
-  return (
+  // Rendered in <body>: inside a card with a blur filter, "fixed" is relative to that card and the
+  // window ended up behind the page header.
+  return createPortal(
     // Clicking the backdrop does NOT close the window: a stray click (or a text
     // selection that ends outside) used to throw away what was being typed.
     // Close with the X button, Cancel, or Escape.
@@ -197,7 +200,8 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
         {/* The content scrolls inside the window, so the title and the page never get cut off. */}
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

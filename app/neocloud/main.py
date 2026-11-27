@@ -54,6 +54,7 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
     from neocloud.domains.capacity.availability import router as capacity_availability_router
     from neocloud.domains.capacity.orders import router as capacity_orders_router
     from neocloud.domains.capacity.router import router as capacity_router
+    from neocloud.domains.catalog.ratecard import router as ratecard_router
     from neocloud.domains.catalog.router import router as catalog_router
     from neocloud.domains.contracts.router import router as contracts_router
     from neocloud.domains.customers.router import router as customers_router
@@ -74,6 +75,7 @@ def _register_routers(app: FastAPI, prefix: str) -> None:
     for r in (
         customers_router,
         catalog_router,
+        ratecard_router,
         inventory_router,
         capacity_router,
         capacity_availability_router,

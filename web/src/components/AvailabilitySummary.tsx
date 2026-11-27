@@ -5,10 +5,17 @@ import { api } from '../api';
 import { hasPermission } from '../permissions';
 import { useToast } from './toast';
 import { Badge, Modal } from './ui';
-import { copyAvailabilityText, model, n, unit, when, type Offer } from './AvailabilityList';
+import { copyAvailabilityText, model, n, priceText, unit, when, type Offer } from './AvailabilityList';
 
-const price = (o: Offer) =>
-  o.price_per_gpu_hour != null ? `${o.currency === 'USD' ? 'US$' : o.currency} ${Number(o.price_per_gpu_hour).toFixed(2)}` : null;
+/** One line per term: "36 mo US$ 6.44 – 6.80". */
+const tierLines = (o: Offer): string[] => {
+  const by = new Map<number, number[]>();
+  for (const r of o.rates ?? []) by.set(r.term_months, [...(by.get(r.term_months) ?? []), Number(r.price_per_gpu_hour)]);
+  return [...by.entries()].sort((a, b) => b[0] - a[0]).map(([term, v]) => {
+    const lo = Math.min(...v).toFixed(2), hi = Math.max(...v).toFixed(2);
+    return `${term} mo  US$ ${lo === hi ? lo : `${lo} – ${hi}`}`;
+  });
+};
 const monthShort = (d: string) => {
   const [y, m] = d.split('-');
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short' });
@@ -105,7 +112,11 @@ export default function AvailabilitySummary() {
                         <td className="py-1.5 pr-3">{o.site}</td>
                         <td className="py-1.5 pr-3 text-right">{o.total_qty != null ? `${n(o.total_qty)} ${unit(o)}` : '—'}</td>
                         <td className="py-1.5 pr-3 text-right font-semibold text-cyan">{n(o.available_qty)} {unit(o)}</td>
-                        <td className="py-1.5 text-right">{price(o) ?? <span className="text-grape-soft">on request</span>}</td>
+                        <td className="py-1.5 text-right">
+                          {o.price_per_gpu_hour != null ? priceText(o) : o.rates?.length
+                            ? tierLines(o).map((l) => <div key={l} className="whitespace-nowrap">{l}</div>)
+                            : <span className="text-grape-soft">on request</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -114,6 +125,10 @@ export default function AvailabilitySummary() {
             </div>
           ))}
           {offers.length === 0 && <p className="text-sm text-grape-soft">No availability listed yet.</p>}
+          <p className="text-xs text-grape-soft">
+            Prices per GPU-hour by term, depending on the upfront share (35% to 65%; VR200 40%). They apply to orders of
+            at least 32 servers (256 GPUs); smaller orders need an administrator's approval. GPUs are sold in multiples of 8.
+          </p>
           <div className="flex justify-end gap-3">
             <button type="button" className="btn-ghost" onClick={() => copyAvailabilityText(toast)}>Copy as text</button>
             <button type="button" className="btn-primary" onClick={() => setOpen(false)}>Close</button>

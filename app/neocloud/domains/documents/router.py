@@ -343,6 +343,11 @@ async def generate_for_opportunity(
         opp, customer, _c, _q = await deal_service.load_deal(session, payload.opportunity_id)
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    if opp.min_order_status == "PENDING" and payload.doc_type.value in generator.COMMITMENT_DOCS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "This order is below the 32-server minimum and waits for an administrator's approval.",
+        )
     version = await generator.next_version(session, opp.id, payload.doc_type)
     document = GeneratedDocument(
         doc_type=payload.doc_type,

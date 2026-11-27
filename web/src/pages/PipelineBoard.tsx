@@ -32,6 +32,7 @@ export interface BoardOpportunity {
   next_action?: string | null;
   expected_start?: string | null;
   escrow_required?: boolean;
+  min_order_status?: string | null;
 }
 
 export interface InventoryLane {
@@ -161,6 +162,12 @@ export default function PipelineBoard({
           <span className={`rounded-full border px-2 py-0.5 text-[11px] ${noEscrow ? 'border-white/10 text-grape-soft' : 'border-cyan/40 text-cyan'}`}>
             {noEscrow ? 'No escrow' : 'Escrow'}
           </span>
+          {o.min_order_status === 'PENDING' && (
+            <span className="rounded-full border border-amber-300/50 px-2 py-0.5 text-[11px] text-amber-300"
+              title="Below 32 servers (256 GPUs): an administrator must approve it" data-testid={`approval-${o.id}`}>
+              Approval pending
+            </span>
+          )}
         </div>
         <div className="text-xs text-grape-soft">
           <div className="truncate">Owner: <span className="text-white">{o.account_owner ?? '—'}</span></div>

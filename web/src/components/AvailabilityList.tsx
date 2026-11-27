@@ -12,6 +12,16 @@ export interface Offer {
   id: string; gpu_model: string; cooling: 'AIR' | 'LIQUID' | null; quantity_unit: 'GPUS' | 'RACKS'; site: string;
   available_from: string | null; total_qty: number | null; available_qty: number;
   price_per_gpu_hour: string | null; currency: string; notes: string | null;
+  rates: Array<{ term_months: number; upfront_pct: string | number; price_per_gpu_hour: string | number }>;
+}
+
+/** "US$ 5.29 – 5.78" from the rate card, or the manual price when one is set; null = on request. */
+export function priceText(o: Offer): string | null {
+  if (o.price_per_gpu_hour != null) return `${o.currency === 'USD' ? 'US$' : o.currency} ${Number(o.price_per_gpu_hour).toFixed(2)}`;
+  if (!o.rates?.length) return null;
+  const v = o.rates.map((r) => Number(r.price_per_gpu_hour));
+  const lo = Math.min(...v).toFixed(2), hi = Math.max(...v).toFixed(2);
+  return lo === hi ? `US$ ${lo}` : `US$ ${lo} – ${hi}`;
 }
 
 export const n = (v: number) => v.toLocaleString('en-US');
@@ -51,8 +61,7 @@ export default function AvailabilityList() {
     { key: 's', header: 'Site', render: (o) => o.site },
     { key: 't', header: 'Total', className: 'text-right', render: (o) => (o.total_qty != null ? `${n(o.total_qty)} ${unit(o)}` : '—') },
     { key: 'a', header: 'Available now', className: 'text-right', render: (o) => <span className="font-semibold text-cyan">{n(o.available_qty)} {unit(o)}</span> },
-    { key: 'p', header: 'Price / GPU-hour', className: 'text-right', render: (o) => (o.price_per_gpu_hour != null
-      ? <span>{o.currency === 'USD' ? 'US$' : o.currency} {Number(o.price_per_gpu_hour).toFixed(2)}</span> : <span className="text-grape-soft">no price</span>) },
+    { key: 'p', header: 'Price / GPU-hour', className: 'text-right', render: (o) => priceText(o) ?? <span className="text-grape-soft">on request</span> },
     ...(canWrite ? [{ key: 'x', header: '', className: 'text-right', render: (o: Offer) => (
       <span className="flex justify-end gap-2">
         <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setEditing(o)}>Edit</button>
@@ -120,12 +129,13 @@ function OfferModal({ offer, onClose, onSaved }: { offer: Offer | null; onClose:
           <div><label className="label" htmlFor="av_month">Available from (month)</label>
             <input id="av_month" className="input" type="month" value={f.month} onChange={set('month')} />
             <span className="text-xs text-grape-soft">Blank = immediate</span></div>
-          <div><label className="label" htmlFor="av_price">Price per GPU-hour (US$)</label>
-            <input id="av_price" className="input" type="number" min={0} step="0.0001" value={f.price} onChange={set('price')} /></div>
+          <div><label className="label" htmlFor="av_price">Price override per GPU-hour (US$)</label>
+            <input id="av_price" className="input" type="number" min={0} step="0.0001" value={f.price} onChange={set('price')} />
+            <span className="text-xs text-grape-soft">Blank: the rate card price applies</span></div>
           <div><label className="label" htmlFor="av_total">Total</label>
-            <input id="av_total" className="input" type="number" min={0} value={f.total_qty} onChange={set('total_qty')} /></div>
+            <input id="av_total" className="input" type="number" min={0} step={f.quantity_unit === 'GPUS' ? 8 : 1} value={f.total_qty} onChange={set('total_qty')} /></div>
           <div><label className="label" htmlFor="av_avail">Available at the moment</label>
-            <input id="av_avail" className="input" type="number" min={0} required value={f.available_qty} onChange={set('available_qty')} /></div>
+            <input id="av_avail" className="input" type="number" min={0} step={f.quantity_unit === 'GPUS' ? 8 : 1} required value={f.available_qty} onChange={set('available_qty')} /></div>
         </div>
         <div><label className="label" htmlFor="av_notes">Notes</label><textarea id="av_notes" className="input" rows={2} value={f.notes} onChange={set('notes')} /></div>
         <div className="flex justify-end gap-3">

@@ -4,13 +4,19 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from neocloud.domains.sales.models import QuoteStatus, SalesStage
+from neocloud.domains.sales.models import GPUS_PER_SERVER, QuoteStatus, SalesStage
 
 # --------------------------------------------------------------------------- #
 # Opportunity
 # --------------------------------------------------------------------------- #
+
+
+def _whole_servers(v: int | None) -> int | None:
+    if v is not None and v % GPUS_PER_SERVER:
+        raise ValueError(f"GPUs are sold in whole servers: use a multiple of {GPUS_PER_SERVER}")
+    return v
 
 
 class OpportunityBase(BaseModel):
@@ -37,6 +43,8 @@ class OpportunityBase(BaseModel):
     account_owner: str | None = None
     account_owner_email: str | None = None
     account_owner_sub: str | None = None
+
+    _servers = field_validator("quantity")(_whole_servers)
 
 
 class OpportunityCreate(OpportunityBase):
@@ -68,6 +76,8 @@ class OpportunityUpdate(BaseModel):
     account_owner_email: str | None = None
     account_owner_sub: str | None = None
 
+    _servers = field_validator("quantity")(_whole_servers)
+
 
 class InventoryLane(BaseModel):
     gpu_model: str
@@ -85,6 +95,8 @@ class OpportunityRead(OpportunityBase):
     id: str
     tenant_id: str | None = None
     stage_before_hold: str | None = None
+    min_order_status: str | None = None
+    min_order_approved_by: str | None = None
     created_at: datetime
     updated_at: datetime
 

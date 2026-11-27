@@ -8,7 +8,7 @@ commercial model and unit price.
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from neocloud.db.base import AuditMixin, Base, UUIDMixin
@@ -100,3 +100,18 @@ class Price(Base, UUIDMixin, AuditMixin):
 
     sku: Mapped["Sku"] = relationship(back_populates="prices")
     price_book: Mapped["PriceBook"] = relationship(back_populates="prices")
+
+
+class RateCard(Base, UUIDMixin, AuditMixin):
+    """TensorBay's list price per GPU-hour by platform, term and upfront share.
+
+    Valid for orders of at least 32 servers (256 GPUs); smaller orders need an administrator.
+    """
+
+    __tablename__ = "rate_card"
+    __table_args__ = (UniqueConstraint("platform", "term_months", "upfront_pct", name="uq_rate_card_tier"),)
+
+    platform: Mapped[str] = mapped_column(String(16), nullable=False, index=True)  # B300 | B200 | GB300 | VR200
+    term_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    upfront_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    price_per_gpu_hour: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

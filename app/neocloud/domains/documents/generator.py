@@ -26,6 +26,9 @@ TYPE_FOLDER: dict[str, str] = {
     "POC_AGREEMENT": "PoC Agreement", "ESCROW_AGREEMENT": "Escrow Agreement",
     "ACCEPTANCE_NOTICE": "Acceptance Notice", "LOI": "LOI", "CONTRACT": "Contract",
 }
+
+# Documents that commit the company: not generated for a deal still waiting for an admin approval.
+COMMITMENT_DOCS = frozenset({"MSA", "ORDER_FORM", "ESCROW_AGREEMENT", "CONTRACT"})
 TYPE_TITLE: dict[str, str] = {
     "MSA": "Master Services Agreement", "ORDER_FORM": "Order Form", "NDA": "NDA", "PROPOSAL": "Proposal",
     "POC_AGREEMENT": "PoC Agreement", "ESCROW_AGREEMENT": "Escrow Agreement",

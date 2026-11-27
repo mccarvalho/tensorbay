@@ -70,6 +70,15 @@ ESCROW_STAGES: tuple[SalesStage, ...] = (S.ESCROW_SETUP, S.AWAITING_DEPOSIT, S.E
 ACTIVE_STAGES: tuple[SalesStage, ...] = MACRO_STAGES[5][2]
 
 # Still being worked: everything except active contracts, on hold and lost.
+# Commercial rules: GPUs are sold in whole 8-GPU servers, and an order has a minimum size (32 servers).
+# Below it a deal is saved but waits for an administrator before it can go past the proposal.
+GPUS_PER_SERVER = 8
+MIN_ORDER_SERVERS = 32
+MIN_ORDER_GPUS = GPUS_PER_SERVER * MIN_ORDER_SERVERS
+STAGES_WITHOUT_APPROVAL: frozenset[str] = frozenset(
+    {"NEW_LEAD", "CONTACTED", "INTRO_CALL", "PROPOSAL_SENT", "POC", "ON_HOLD", "LOST"}
+)
+
 OPEN_STAGES: tuple[SalesStage, ...] = tuple(
     s for s in SalesStage if s not in ACTIVE_STAGES and s not in (S.ON_HOLD, S.LOST)
 )
@@ -123,6 +132,9 @@ class Opportunity(Base, UUIDMixin, AuditMixin, TenantMixin):
     # What one node (or rack) is, in one line, for the Order Form. Written from the GPU spec sheet
     # the first time a document needs it, so every document of the deal says the same; editable.
     node_spec: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # null = meets the minimum order; PENDING = below it, waiting for an admin; APPROVED = an admin accepted it.
+    min_order_status: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    min_order_approved_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     upfront_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     payment_structure: Mapped[str | None] = mapped_column(String(1), nullable=True)
     first_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)

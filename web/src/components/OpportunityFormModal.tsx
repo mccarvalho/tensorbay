@@ -12,6 +12,10 @@ import {
 import { Badge, ErrorState, Modal, Spinner, type BadgeTone } from './ui';
 import { useToast, errMessage } from './toast';
 import DateInput from './DateInput';
+import { hasPermission } from '../permissions';
+import {
+  findRate, GPUS_PER_SERVER, HOURS_PER_MONTH, MIN_ORDER_GPUS, MIN_ORDER_SERVERS, rateOptions, type RateRow,
+} from '../ratecard';
 
 type AvailabilityStatus = 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE';
 
@@ -65,6 +69,8 @@ export interface Opportunity {
   payment_structure: string | null;
   first_delivery_date: string | null;
   latest_delivery_date: string | null;
+  min_order_status?: 'PENDING' | 'APPROVED' | null;
+  min_order_approved_by?: string | null;
 }
 
 export interface OpportunityInput {
@@ -249,6 +255,17 @@ export default function OpportunityFormModal({
   }
 
   const isServerModel = form.commercial_model.includes('SERVER');
+  const canApprove = hasPermission('user.admin');
+  const rates = useQuery({ queryKey: ['pricing', 'rate-card'], queryFn: () => api.get<RateRow[]>('/v1/pricing/rate-card'), staleTime: 300_000 });
+  const upfront = form.upfront_pct.trim() === '' ? null : Number(form.upfront_pct);
+  const listRate = findRate(rates.data ?? [], form.gpu_model, form.duration_months, upfront);
+  const rateText = rateOptions(rates.data ?? [], form.gpu_model);
+  const listMrr = listRate ? Math.round(Number(listRate.price_per_gpu_hour) * form.quantity * HOURS_PER_MONTH * 100) / 100 : 0;
+  const approveMut = useMutation({
+    mutationFn: () => api.post<Opportunity>(`/v1/sales/opportunities/${editing!.id}/approve-minimum`, {}),
+    onSuccess: (o) => { invalidate(); toast.success('Order approved'); onSaved?.(o); onClose(); },
+    onError: (e) => toast.error(errMessage(e, 'Could not approve')),
+  });
 
   return (
       <Modal open={open} onClose={onClose} size="wide" title={editing ? 'Edit Opportunity' : 'New Opportunity'}>
@@ -306,10 +323,18 @@ export default function OpportunityFormModal({
             <div>
               <label className="label" htmlFor="opp_qty">Quantity ({isServerModel ? 'servers' : 'GPUs'})</label>
               <input
-                id="opp_qty" type="number" min={1} className="input" required
+                id="opp_qty" type="number" min={GPUS_PER_SERVER} step={GPUS_PER_SERVER} className="input" required
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
               />
+              {form.quantity % GPUS_PER_SERVER !== 0 ? (
+                <p className="mt-1 text-xs text-flamingo" data-testid="qty-step-error">GPUs are sold in whole servers: use a multiple of {GPUS_PER_SERVER}.</p>
+              ) : form.quantity < MIN_ORDER_GPUS ? (
+                <p className="mt-1 text-xs text-amber-300" data-testid="qty-min-note">
+                  Below the minimum of {MIN_ORDER_SERVERS} servers ({num(MIN_ORDER_GPUS)} GPUs).{' '}
+                  {canApprove ? 'Saving it as an administrator approves it.' : 'It is saved, but an administrator must approve it before it moves past the proposal.'}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -342,6 +367,19 @@ export default function OpportunityFormModal({
                 value={form.expected_mrr}
                 onChange={(e) => setForm({ ...form, expected_mrr: Number(e.target.value) })}
               />
+              {listRate ? (
+                <p className="mt-1 text-xs text-grape-soft" data-testid="list-price">
+                  List price <span className="text-white">US$ {Number(listRate.price_per_gpu_hour).toFixed(2)}</span> per GPU-hour
+                  ({form.duration_months} mo · {Number(listRate.upfront_pct)}% upfront) = {' '}
+                  <button type="button" className="text-cyan underline" onClick={() => setForm({ ...form, expected_mrr: listMrr })}>
+                    apply US$ {num(listMrr)}/month
+                  </button>
+                </p>
+              ) : rateText ? (
+                <p className="mt-1 text-xs text-grape-soft" data-testid="list-price-options">
+                  List price is for {rateText}. Set the duration and the upfront % to see it.
+                </p>
+              ) : null}
             </div>
             <div>
               <label className="label" htmlFor="opp_prob">Probability (%)</label>
@@ -502,7 +540,14 @@ export default function OpportunityFormModal({
           {/* Stays in view while the form scrolls */}
           <div className="sticky bottom-0 -mb-1 flex justify-end gap-3 border-t border-white/10 bg-space-700 py-3">
             <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={createMut.isPending || updateMut.isPending}>
+            {editing?.min_order_status === 'PENDING' && canApprove && (
+              <button type="button" className="btn-ghost mr-auto text-amber-300" disabled={approveMut.isPending}
+                onClick={() => approveMut.mutate()} data-testid="approve-minimum">Approve order below the minimum</button>
+            )}
+            {editing?.min_order_status === 'PENDING' && !canApprove && (
+              <span className="mr-auto self-center text-xs text-amber-300">Waiting for an administrator's approval</span>
+            )}
+            <button type="submit" className="btn-primary" disabled={createMut.isPending || updateMut.isPending || form.quantity % GPUS_PER_SERVER !== 0}>
               {createMut.isPending || updateMut.isPending
                 ? 'Saving…'
                 : editing ? 'Save Changes' : 'Create Opportunity'}

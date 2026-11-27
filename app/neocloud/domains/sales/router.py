@@ -85,6 +85,49 @@ async def get_opportunity(
     return obj
 
 
+def _apply_minimum_order(obj: models.Opportunity, user: CurrentUser, *, quantity_changed: bool) -> None:
+    """Orders under 32 servers (256 GPUs) need an administrator. An admin saving one approves it;
+    anyone else leaves it PENDING. An approval holds until the quantity changes."""
+    if obj.quantity >= models.MIN_ORDER_GPUS:
+        obj.min_order_status = obj.min_order_approved_by = None
+    elif user.has_permission(Permission.USER_ADMIN):
+        obj.min_order_status, obj.min_order_approved_by = "APPROVED", user.email or user.subject
+    elif quantity_changed or obj.min_order_status is None:
+        obj.min_order_status, obj.min_order_approved_by = "PENDING", None
+
+
+def _check_stage_allowed(obj: models.Opportunity, stage) -> None:  # noqa: ANN001
+    if obj.min_order_status == "PENDING" and str(getattr(stage, "value", stage)) not in models.STAGES_WITHOUT_APPROVAL:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"This order is below the minimum of {models.MIN_ORDER_SERVERS} servers ({models.MIN_ORDER_GPUS} GPUs). "
+            "An administrator must approve it before it moves past the proposal.",
+        )
+
+
+@router.post("/opportunities/{opportunity_id}/approve-minimum", response_model=schemas.OpportunityRead)
+async def approve_minimum_order(
+    opportunity_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(require_permission(Permission.USER_ADMIN)),
+) -> models.Opportunity:
+    """An administrator accepts an order below the minimum size."""
+    obj = await session.get(models.Opportunity, opportunity_id)
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Opportunity not found")
+    if obj.min_order_status is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This order meets the minimum; nothing to approve")
+    obj.min_order_status, obj.min_order_approved_by = "APPROVED", user.email or user.subject
+    obj.updated_by = user.subject
+    await session.flush()
+    await record_audit(
+        session, action="approve_minimum_order", entity_type="Opportunity", entity_id=obj.id, actor=user.subject,
+        new_value={"quantity": obj.quantity},
+    )
+    await session.refresh(obj)
+    return obj
+
+
 @router.post(
     "/opportunities",
     response_model=schemas.OpportunityRead,
@@ -101,6 +144,8 @@ async def create_opportunity(
         created_by=user.subject,
         updated_by=user.subject,
     )
+    _apply_minimum_order(obj, user, quantity_changed=True)
+    _check_stage_allowed(obj, obj.sales_stage)
     session.add(obj)
     await session.flush()
     await record_audit(
@@ -127,6 +172,7 @@ async def update_opportunity(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Opportunity not found")
 
     changes = payload.model_dump(exclude_unset=True)
+    old_quantity = obj.quantity
     # Moving a deal to another stage (e.g. dragging it on the board) resets its
     # probability to that stage's default, unless the caller set one explicitly.
     new_stage = changes.get("sales_stage")
@@ -148,6 +194,9 @@ async def update_opportunity(
                 changes["probability"] = models.STAGE_PROBABILITY[stage]
     for field, value in changes.items():
         setattr(obj, field, value)
+    _apply_minimum_order(obj, user, quantity_changed="quantity" in changes and changes["quantity"] != old_quantity)
+    if "sales_stage" in changes:
+        _check_stage_allowed(obj, changes["sales_stage"])
     obj.updated_by = user.subject
 
     await session.flush()

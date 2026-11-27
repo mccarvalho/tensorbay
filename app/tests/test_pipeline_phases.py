@@ -111,7 +111,7 @@ async def test_commissions_only_for_active_contract_stages(client: AsyncClient) 
 async def test_inventory_lanes_show_demand_per_gpu_model(client: AsyncClient) -> None:
     await _opp(client, stage="PROPOSAL_SENT", probability=35, qty=64, model="B300")
     await _opp(client, stage="POC", probability=50, qty=16, model="B300")
-    await _opp(client, stage="ON_HOLD", probability=50, qty=999, model="B300")
+    await _opp(client, stage="ON_HOLD", probability=50, qty=1000, model="B300")
     await _opp(client, stage="WON", probability=100, qty=8, model="GB200")
     lanes = {l["gpu_model"]: l for l in (await client.get(f"{V1}/sales/inventory-lanes")).json()}
     assert lanes["B300"]["open_demand"] == 80

@@ -16,6 +16,8 @@ from neocloud.auth.dependencies import CurrentUser, require_permission
 from neocloud.auth.rbac import Permission
 from neocloud.db.session import get_session
 from neocloud.domains.capacity.models import AvailabilityOffer
+from neocloud.domains.catalog import ratecard
+from neocloud.domains.catalog.models import RateCard
 
 router = APIRouter(prefix="/capacity/availability", tags=["Capacity"])
 
@@ -65,15 +67,28 @@ class OfferUpdate(BaseModel):
         return v.replace(day=1) if v else v
 
 
+class RateTier(BaseModel):
+    term_months: int
+    upfront_pct: Decimal
+    price_per_gpu_hour: Decimal
+
+
 class OfferRead(OfferBase):
     model_config = ConfigDict(from_attributes=True)
     id: str
     created_at: datetime
     updated_at: datetime
+    # List price tiers of this platform (rate card); orders of 32 servers or more.
+    rates: list[RateTier] = []
 
 
 class OfferText(BaseModel):
     text: str
+
+
+def _check_servers(unit: str | None, *quantities: int | None) -> None:
+    if unit == "GPUS" and any(q is not None and q % 8 for q in quantities):
+        raise HTTPException(status_code=422, detail="GPUs are sold in whole servers: use a multiple of 8")
 
 
 def _check(total: int | None, available: int | None) -> None:
@@ -97,7 +112,14 @@ def _price(o: AvailabilityOffer) -> str | None:
         f"US$ {Decimal(o.price_per_gpu_hour):.2f} per GPU-hour"
 
 
-def render_text(offers: list[AvailabilityOffer]) -> str:
+def _rate_lines(tiers: list[RateTier]) -> list[str]:
+    by_term: dict[int, list[str]] = {}
+    for t in tiers:
+        by_term.setdefault(t.term_months, []).append(f"{Decimal(t.upfront_pct).normalize():f}% upfront US$ {Decimal(t.price_per_gpu_hour):.2f}")
+    return [f"{term}-month term: " + " | ".join(parts) for term, parts in sorted(by_term.items(), reverse=True)]
+
+
+def render_text(offers: list[AvailabilityOffer], rates: dict[str, list[RateTier]] | None = None) -> str:
     """The list in the form sales sends to customers, prices included where they are set."""
     groups: dict[date | None, list[AvailabilityOffer]] = {}
     for o in sorted(offers, key=lambda x: (x.available_from or date.min, x.gpu_model, x.site)):
@@ -114,8 +136,13 @@ def render_text(offers: list[AvailabilityOffer]) -> str:
             lines.append(f"Site: {o.site}")
             if (price := _price(o)):
                 lines.append(f"Price: {price}")
+            elif rates and rates.get(o.id):
+                lines.append("Price per GPU-hour (orders of 32 servers or more):")
+                lines += [f"  {x}" for x in _rate_lines(rates[o.id])]
             lines.append("")
         blocks.append("\n".join(lines).rstrip())
+    if rates and any(rates.values()):
+        blocks.append("Minimum order: 32 servers (256 GPUs). Smaller orders need approval.")
     return "\n\n".join(blocks)
 
 
@@ -124,6 +151,19 @@ async def _get(session: AsyncSession, offer_id: str) -> AvailabilityOffer:
     if o is None:
         raise HTTPException(status_code=404, detail="Availability entry not found")
     return o
+
+
+async def _with_rates(session: AsyncSession, offers: list[AvailabilityOffer]) -> list[OfferRead]:
+    cache: dict[str, list[RateCard]] = {}
+    out = []
+    for o in offers:
+        key = ratecard.platform_key(o.gpu_model) or ""
+        if key not in cache:
+            cache[key] = await ratecard.rates_for(session, o.gpu_model)
+        read = OfferRead.model_validate(o)
+        read.rates = [RateTier(term_months=r.term_months, upfront_pct=r.upfront_pct, price_per_gpu_hour=r.price_per_gpu_hour) for r in cache[key]]
+        out.append(read)
+    return out
 
 
 async def _all(session: AsyncSession) -> list[AvailabilityOffer]:
@@ -138,17 +178,20 @@ async def _all(session: AsyncSession) -> list[AvailabilityOffer]:
 
 @router.get("", response_model=list[OfferRead])
 async def list_offers(session: Session, _user: ReadUser):
-    return await _all(session)
+    return await _with_rates(session, await _all(session))
 
 
 @router.get("/text", response_model=OfferText)
 async def offers_text(session: Session, _user: ReadUser):
-    return OfferText(text=render_text(await _all(session)))
+    offers = await _all(session)
+    rates = {o.id: r.rates for o, r in zip(offers, await _with_rates(session, offers), strict=True)}
+    return OfferText(text=render_text(offers, rates))
 
 
 @router.post("", response_model=OfferRead, status_code=status.HTTP_201_CREATED)
 async def create_offer(payload: OfferCreate, session: Session, user: WriteUser):
     _check(payload.total_qty, payload.available_qty)
+    _check_servers(payload.quantity_unit, payload.total_qty, payload.available_qty)
     o = AvailabilityOffer(**payload.model_dump(), created_by=user.subject, updated_by=user.subject)
     o.currency = o.currency.upper()
     session.add(o)
@@ -156,7 +199,7 @@ async def create_offer(payload: OfferCreate, session: Session, user: WriteUser):
     await record_audit(session, action="create", entity_type=ENTITY, entity_id=o.id, actor=user.subject,
                        new_value=payload.model_dump(mode="json"))
     await session.refresh(o)
-    return o
+    return (await _with_rates(session, [o]))[0]
 
 
 @router.patch("/{offer_id}", response_model=OfferRead)
@@ -169,12 +212,13 @@ async def update_offer(offer_id: str, payload: OfferUpdate, session: Session, us
     for k, v in changes.items():
         setattr(o, k, v.upper() if k == "currency" and v else v)
     _check(o.total_qty, o.available_qty)
+    _check_servers(o.quantity_unit, o.total_qty, o.available_qty)
     o.updated_by = user.subject
     await session.flush()
     await record_audit(session, action="update", entity_type=ENTITY, entity_id=o.id, actor=user.subject,
                        new_value=payload.model_dump(mode="json", exclude_unset=True))
     await session.refresh(o)
-    return o
+    return (await _with_rates(session, [o]))[0]
 
 
 @router.delete("/{offer_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

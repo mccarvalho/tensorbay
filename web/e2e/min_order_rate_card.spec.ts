@@ -32,5 +32,10 @@ test('quantity step, minimum order note and list price', async ({ page }) => {
   await hint.getByRole('button').click();
   const mrr = Number(await page.locator('#opp_mrr').inputValue());
   expect(Math.round(mrr)).toBe(Math.round(6.44 * 512 * 730));
+  // Capacity Check counts the availability list of the Capacity page (B300: Jan and Feb in Brazil, Mar/Apr in Argentina...).
+  await page.getByRole('button', { name: /^Check 512 × HGX B300/ }).click();
+  const listed = page.getByTestId('capacity-listed');
+  await expect(listed).toContainText('Brazil');
+  await expect(listed).toContainText('Argentina');
   await page.screenshot({ path: '/tmp/min_order.png' });
 });

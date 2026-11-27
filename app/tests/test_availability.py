@@ -89,3 +89,24 @@ async def test_only_an_admin_changes_a_rate(client: AsyncClient, rate_card):
         app.dependency_overrides.pop(get_current_user, None)
     r = await client.patch(f"/v1/pricing/rate-card/{rate['id']}", json={"price_per_gpu_hour": "9.99"})
     assert r.status_code == 200 and r.json()["price_per_gpu_hour"] == "9.99"
+
+
+async def test_capacity_check_counts_the_availability_list(client: AsyncClient):
+    await client.post(V1, json={"gpu_model": "B300", "cooling": "AIR", "site": "Brazil", "available_from": "2027-01-01", "available_qty": 512})
+    await client.post(V1, json={"gpu_model": "B300", "cooling": "LIQUID", "site": "Spain", "available_from": "2027-03-01", "available_qty": 512})
+    await client.post(V1, json={"gpu_model": "A100", "site": "Chicago, US", "available_qty": 1400})
+    await client.post(V1, json={"gpu_model": "VR200", "quantity_unit": "RACKS", "site": "Brazil", "available_from": "2027-03-01", "available_qty": 16})
+
+    a100 = (await client.get("/v1/capacity/check", params={"gpu_model": "A100", "quantity": 1024})).json()
+    assert a100["status"] == "AVAILABLE" and a100["listed_now"] == 1400 and a100["gap"] == 0
+
+    b300 = (await client.get("/v1/capacity/check", params={"gpu_model": "HGX B300", "quantity": 1024})).json()
+    assert b300["status"] == "PARTIALLY_AVAILABLE" and b300["listed_later"] == 1024 and b300["gap"] == 1024
+    assert [x["site"] for x in b300["listed"]] == ["Brazil", "Spain"]
+
+    liquid = (await client.get("/v1/capacity/check", params={"gpu_model": "HGX B300 Liquid-Cooled", "quantity": 1024})).json()
+    assert liquid["status"] == "UNAVAILABLE" and liquid["listed_later"] == 512  # only the liquid-cooled line
+
+    vr = (await client.get("/v1/capacity/check", params={"gpu_model": "VR200", "quantity": 1152})).json()
+    assert vr["listed_later"] == 16 * 72 and vr["status"] == "PARTIALLY_AVAILABLE"
+    assert vr["listed"][0]["racks"] == 16

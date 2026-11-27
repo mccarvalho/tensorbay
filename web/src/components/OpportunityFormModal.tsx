@@ -105,7 +105,16 @@ interface CapacityCheck {
   gap: number;
   incoming: number;
   status: AvailabilityStatus;
+  listed_now: number;
+  listed_later: number;
+  listed: Array<{ site: string; gpu_model: string; cooling: string | null; available_from: string | null; gpus: number; racks: number | null }>;
 }
+
+const listedWhen = (d: string | null) => {
+  if (!d) return 'now';
+  const [y, m] = d.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+};
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -600,9 +609,22 @@ function CapacityCheckPanel({ gpuModel, quantity }: { gpuModel: string; quantity
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <Badge tone={AVAIL_TONE[q.data.status]}>{q.data.status.replace('_', ' ')}</Badge>
           <span className="text-grape-soft">Requested <b className="text-white">{num(q.data.requested)}</b></span>
-          <span className="text-grape-soft">Available <b className="text-white">{num(q.data.available)}</b></span>
-          <span className="text-grape-soft">Incoming <b className="text-white">{num(q.data.incoming)}</b></span>
-          {q.data.gap > 0 && <span className="text-flamingo">Gap <b>{num(q.data.gap)}</b></span>}
+          <span className="text-grape-soft">In stock <b className="text-white">{num(q.data.available)}</b></span>
+          <span className="text-grape-soft">Listed now <b className="text-white">{num(q.data.listed_now)}</b></span>
+          <span className="text-grape-soft">Coming <b className="text-white">{num(q.data.incoming + q.data.listed_later)}</b></span>
+          {q.data.gap > 0 && <span className="text-flamingo">Short today <b>{num(q.data.gap)}</b></span>}
+          {q.data.listed.length > 0 ? (
+            <ul className="w-full text-xs text-grape-soft" data-testid="capacity-listed">
+              {q.data.listed.map((x, i) => (
+                <li key={i}>
+                  <span className="text-white">{x.gpu_model}{x.cooling ? ` · ${x.cooling === 'AIR' ? 'Air' : 'Liquid'}` : ''}</span>
+                  {' '}{x.racks != null ? `${num(x.racks)} racks (${num(x.gpus)} GPUs)` : `${num(x.gpus)} GPUs`} · {x.site} · {listedWhen(x.available_from)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="w-full text-xs text-grape-soft">Nothing for this platform on the Capacity availability list.</p>
+          )}
         </div>
       ) : null}
     </div>

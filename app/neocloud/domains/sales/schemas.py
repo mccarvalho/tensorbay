@@ -44,11 +44,10 @@ class OpportunityBase(BaseModel):
     account_owner_email: str | None = None
     account_owner_sub: str | None = None
 
-    _servers = field_validator("quantity")(_whole_servers)
-
 
 class OpportunityCreate(OpportunityBase):
-    pass
+    # Only new and edited deals: older deals with other sizes must still be listed.
+    _servers = field_validator("quantity")(_whole_servers)
 
 
 class OpportunityUpdate(BaseModel):

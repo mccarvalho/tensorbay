@@ -34,8 +34,24 @@ class CapacityLedger(BaseModel):
     available: int
 
 
+class ListedAvailability(BaseModel):
+    """One line of the Capacity page's availability list that matches the requested platform."""
+
+    site: str
+    gpu_model: str
+    cooling: str | None = None
+    available_from: date | None = None  # null = immediate
+    gpus: int                           # racks are converted to GPUs (72 per NVL72 rack)
+    racks: int | None = None
+
+
 class AvailabilityCheck(BaseModel):
-    """Result of an overselling-prevention check (plan section 9)."""
+    """Result of an overselling-prevention check (plan section 9).
+
+    ``available``/``incoming`` come from the asset inventory and supply orders. ``listed_now`` and
+    ``listed_later`` come from the availability list on the Capacity page (what sales can offer),
+    and count toward the status: immediate entries like stock, dated entries like incoming supply.
+    """
 
     gpu_model: str
     requested: int
@@ -43,6 +59,9 @@ class AvailabilityCheck(BaseModel):
     gap: int
     incoming: int
     status: AvailabilityStatus
+    listed_now: int = 0
+    listed_later: int = 0
+    listed: list[ListedAvailability] = []
 
 
 # --- Incoming capacity ---

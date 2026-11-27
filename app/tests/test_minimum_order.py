@@ -69,3 +69,14 @@ async def test_an_admin_saving_a_small_order_approves_it_and_a_size_change_asks_
     finally:
         app.dependency_overrides.pop(get_current_user, None)
     assert (await client.post(f"{V1}/sales/opportunities/{big['id']}/approve-minimum")).status_code == 200
+
+
+async def test_older_deals_with_other_sizes_are_still_listed(client: AsyncClient, session):
+    from neocloud.domains.sales.models import Opportunity
+
+    cid = (await client.post(f"{V1}/customers", json={"legal_name": "Old", "status": "PROSPECT"})).json()["id"]
+    session.add(Opportunity(customer_id=cid, gpu_model="H200", quantity=36, duration_months=12,
+                            commercial_model="GPU_MONTHLY", expected_mrr=1, probability=10))
+    await session.commit()
+    r = await client.get(f"{V1}/sales/opportunities")
+    assert r.status_code == 200 and any(o["quantity"] == 36 for o in r.json())

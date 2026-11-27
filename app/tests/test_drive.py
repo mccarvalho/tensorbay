@@ -266,3 +266,23 @@ async def test_opportunity_short_name_round_trip(client) -> None:
     assert o["short_name"] == "Renamed"
     too_long = await client.post(f"{V1}/sales/opportunities", json={**body, "short_name": "x" * 61})
     assert too_long.status_code == 422
+
+
+async def test_documents_filed_at_the_same_time_share_one_folder_tree(session):
+    """MSA, Order Form and Escrow of one deal generated together used to create three deal folders."""
+    import asyncio
+
+    from neocloud.domains.drive import service as ds
+
+    class SlowDrive(FakeDrive):
+        async def find_child_folder(self, parent_id, name):
+            found = await super().find_child_folder(parent_id, name)
+            await asyncio.sleep(0.01)  # Drive answers slowly: the race window
+            return found
+
+    drive = SlowDrive()
+    paths = [["Clients", "Foxgaroo", "2026-11-Deal", t] for t in ("MSA", "Order Form", "Escrow Agreement")]
+    await asyncio.gather(*(ds.ensure_path(session, drive, "ROOTFOLDER123", p, "t") for p in paths))
+    names = [v["name"] for v in drive.items.values() if v["folder"] and v["parent"] not in (None,)]
+    assert names.count("Clients") == 1 and names.count("Foxgaroo") == 1 and names.count("2026-11-Deal") == 1
+    assert sorted(n for n in names if n in ("MSA", "Order Form", "Escrow Agreement")) == ["Escrow Agreement", "MSA", "Order Form"]

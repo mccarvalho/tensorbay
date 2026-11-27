@@ -8,7 +8,7 @@ from datetime import date, datetime
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from neocloud.core.config import Settings
@@ -104,9 +104,9 @@ class GoogleDrive:
             return None
         return self._item(f)
 
-    def _list(self, q: str, page_size: int = 25) -> list[DriveItem]:
+    def _list(self, q: str, page_size: int = 25, order: str = "name") -> list[DriveItem]:
         resp = self._svc().files().list(
-            q=q, fields=f"files({_FIELDS})", pageSize=page_size, orderBy="name",
+            q=q, fields=f"files({_FIELDS})", pageSize=page_size, orderBy=order,
             supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
         ).execute()
         return [self._item(f) for f in resp.get("files", [])]
@@ -140,7 +140,8 @@ class GoogleDrive:
     async def find_child_folder(self, parent_id: str, name: str) -> DriveItem | None:
         q = (f"mimeType = '{FOLDER_MIME}' and trashed = false and "
              f"'{_q(parent_id)}' in parents and name = '{_q(name)}'")
-        found = await asyncio.to_thread(self._list, q, 1)
+        # If duplicates already exist, always use the oldest, so every document lands in the same one.
+        found = await asyncio.to_thread(self._list, q, 1, "createdTime")
         return found[0] if found else None
 
     async def create_folder(self, parent_id: str, name: str) -> DriveItem:
@@ -186,6 +187,16 @@ def is_revoked(exc: Exception) -> bool:
 # --------------------------------------------------------------------------- #
 # Folder tree
 # --------------------------------------------------------------------------- #
+_path_locks: dict[str, asyncio.Lock] = {}
+
+
+async def _lock_tree(session: AsyncSession, root_id: str) -> None:
+    """Across API tasks: a Postgres advisory lock held until this transaction ends, so a second
+    job waits and then sees the folders (and cache rows) the first one created."""
+    if session.bind.dialect.name == "postgresql":
+        await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"drive-tree:{root_id}"})
+
+
 async def ensure_path(
     session: AsyncSession, drive: DriveApi, root_id: str, parts: list[str], actor: str
 ) -> str:
@@ -193,7 +204,21 @@ async def ensure_path(
 
     Folder ids are cached per path. A cached folder that was deleted or trashed in
     Drive is detected and re-created, so the tree heals itself.
+
+    Documents of one deal are often generated together (MSA, Order Form, Escrow). Without
+    serializing, each job looked for the folder at the same moment, found none and created its
+    own copy. Folder creation is therefore done one job at a time per root folder.
     """
+    # The database lock first (it is re-entrant for this transaction), then the in-process one,
+    # so a job never waits for the database while holding the in-process lock.
+    await _lock_tree(session, root_id)
+    async with _path_locks.setdefault(root_id, asyncio.Lock()):
+        return await _ensure_path(session, drive, root_id, parts, actor)
+
+
+async def _ensure_path(
+    session: AsyncSession, drive: DriveApi, root_id: str, parts: list[str], actor: str
+) -> str:
     parent = root_id
     path = ""
     trust_cache = True  # once a level is rebuilt, deeper cached ids are stale
